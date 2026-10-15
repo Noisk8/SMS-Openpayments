@@ -1,0 +1,24 @@
+# dependencias y builds
+node_modules/
+.next/
+out/
+dist/
+coverage/
+next-env.d.ts
+*.tsbuildinfo
+
+# entorno y secretos
+.env
+.env.*
+!.env.example
+*.pem
+keys/
+
+# Prisma generado
+src/generated/
+
+# pruebas
+.tmp-test-db/
+
+# base local de desarrollo sin Docker
+.local-db/

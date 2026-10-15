@@ -1,0 +1,168 @@
+generator client {
+  provider   = "prisma-client"
+  output     = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TransactionStatus {
+  PENDING
+  REQUIRES_AUTHORIZATION
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum LedgerDirection {
+  DEBIT
+  CREDIT
+}
+
+enum SmsDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum PhoneVerificationStatus {
+  PENDING
+  CONSUMED
+}
+
+model User {
+  id              String    @id @default(uuid())
+  telefono        String    @unique
+  alias           String    @unique
+  passwordHash    String?
+  phoneVerifiedAt DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  wallets        Wallet[]
+  authorizations PaymentAuthorization[]
+  sentTx         Transaction[]          @relation("TransactionSender")
+  receivedTx     Transaction[]          @relation("TransactionReceiver")
+}
+
+model Wallet {
+  id                  String   @id @default(uuid())
+  userId              String?
+  provider            String
+  walletAddress       String   @unique
+  /// true solo para la cuenta de tesorería mock (puede quedar en negativo por fixtures).
+  isSystem            Boolean  @default(false)
+  publicKey           String?
+  encryptedPrivateKey String?
+  keyId               String?
+  currency            String
+  assetScale          Int
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user           User?                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  authorizations PaymentAuthorization[]
+  ledgerEntries  LedgerEntry[]
+
+  @@unique([userId, provider])
+  @@index([provider])
+}
+
+model PaymentAuthorization {
+  id                       String    @id @default(uuid())
+  userId                   String
+  walletId                 String
+  transactionId            String?
+  provider                 String
+  status                   String
+  encryptedAccessToken     String?
+  encryptedContinueToken   String?
+  continueUri              String?
+  interactRedirectUrl      String?
+  permissionType           String
+  amountLimit              BigInt?
+  currency                 String
+  expiresAt                DateTime?
+  revokedAt                DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+
+  @@index([userId, provider])
+  @@index([transactionId])
+}
+
+model Transaction {
+  id                    String            @id @default(uuid())
+  senderId              String?
+  receiverId            String
+  amount                BigInt
+  currency              String
+  status                TransactionStatus
+  provider              String
+  providerTransactionId String?
+  idempotencyKey        String            @unique
+  reference             String            @unique
+  failureReason         String?
+  createdAt             DateTime          @default(now())
+  completedAt           DateTime?
+  updatedAt             DateTime          @updatedAt
+
+  sender       User?         @relation("TransactionSender", fields: [senderId], references: [id])
+  receiver     User          @relation("TransactionReceiver", fields: [receiverId], references: [id])
+  ledgerEntries LedgerEntry[]
+
+  @@index([senderId])
+  @@index([receiverId])
+}
+
+model LedgerEntry {
+  id            String          @id @default(uuid())
+  transactionId String
+  walletId      String
+  direction     LedgerDirection
+  /// Importe positivo en unidades mínimas del activo.
+  amount        BigInt
+  createdAt     DateTime        @default(now())
+
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  wallet      Wallet      @relation(fields: [walletId], references: [id])
+
+  @@index([walletId])
+  @@index([transactionId])
+}
+
+model SmsMessage {
+  id                String       @id @default(uuid())
+  provider          String
+  providerMessageId String?
+  direction         SmsDirection
+  from              String
+  to                String
+  bodyEncrypted     String
+  status            String
+  createdAt         DateTime     @default(now())
+
+  @@unique([provider, providerMessageId])
+  @@index([createdAt])
+}
+
+model PhoneVerification {
+  id          String                  @id @default(uuid())
+  telefono    String
+  alias        String
+  passwordHash String?
+  walletAddress String?
+  codeHash     String
+  attempts    Int                     @default(0)
+  status      PhoneVerificationStatus @default(PENDING)
+  expiresAt   DateTime
+  consumedAt  DateTime?
+  createdAt   DateTime                @default(now())
+
+  @@index([telefono, status])
+}
