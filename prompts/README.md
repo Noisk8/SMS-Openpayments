@@ -10,6 +10,8 @@ IA del hackatón. Un archivo por tema/sesión.
   Workflow Kit.
 - [`2026-10-16-cierre-bootstrap.md`](2026-10-16-cierre-bootstrap.md) — cierre del bootstrap, tag
   `known-good`, push a `origin` y reanudación del registro de prompts.
+- [`2026-10-16-specs-backend.md`](2026-10-16-specs-backend.md) — specs completas de la iteración 1
+  del backend SMS + Open Payments.
 
 Convención: `AAAA-MM-DD-tema.md`, con el prompt tal cual se envió y las respuestas/respuestas del
 equipo relevantes.

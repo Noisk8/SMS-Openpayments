@@ -11,6 +11,13 @@ coverage/
 *.pem
 keys/
 
+# datos locales del backend (SQLite)
+data/
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+
 # Workflow de agentes — SOLO LOCAL.
 # Cada integrante instala y configura el suyo; nada de esto se versiona.
 .opencode/

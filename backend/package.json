@@ -1,0 +1,33 @@
+{
+  "name": "sms-openpayments",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pagos por SMS en Colombia con Interledger y Open Payments",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "verify": "npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "@interledger/open-payments": "^7.4.0",
+    "better-sqlite3": "^13.0.3",
+    "dotenv": "^18.0.8",
+    "fastify": "^5.12.7",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}
