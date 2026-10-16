@@ -9,7 +9,7 @@ import type { Queryable } from "../db";
  * reservation, the wallet link and the assignment commit atomically.
  */
 
-export type PoolRole = "TREASURY" | "CUSTOMER";
+export type PoolRole = "TREASURY" | "CUSTOMER" | "EXTERNAL_RECIPIENT";
 export type PoolAllocationStatus = "AVAILABLE" | "RESERVED" | "ASSIGNED";
 export type FundingStatus =
   | "PENDING"
@@ -77,6 +77,16 @@ export async function getPoolWalletById(db: Queryable, id: string): Promise<Pool
 export async function getTreasuryWallet(db: Queryable): Promise<PoolWalletRow | undefined> {
   return db.get<PoolWalletRow>(
     "SELECT * FROM demo_wallet_pool WHERE role = 'TREASURY' ORDER BY seq ASC LIMIT 1",
+  );
+}
+
+/**
+ * The optional external payment destination of the pool (never assignable).
+ * At most one is expected; the oldest wins if more than one ever exists.
+ */
+export async function getExternalRecipientWallet(db: Queryable): Promise<PoolWalletRow | undefined> {
+  return db.get<PoolWalletRow>(
+    "SELECT * FROM demo_wallet_pool WHERE role = 'EXTERNAL_RECIPIENT' ORDER BY seq ASC LIMIT 1",
   );
 }
 

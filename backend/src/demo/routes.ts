@@ -17,6 +17,8 @@ export interface DemoRouteDeps {
 const importSchema = z.object({
   treasury: z.string().url(),
   customers: z.array(z.string().url()).min(1, "Se requiere al menos una wallet de cliente"),
+  /** Optional external payment destination; never assigned to a customer. */
+  externalRecipient: z.string().url().optional(),
 });
 
 const userIdParams = z.object({ id: z.string().min(1) });
