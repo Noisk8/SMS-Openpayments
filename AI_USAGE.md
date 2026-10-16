@@ -8,6 +8,9 @@ tools were used, for what, and where in the project. The real prompts are stored
 
 - **OpenCode** (AI agent; model **DeepSeek V4.1 Flash**) — used in this session to reset the
   repository, write the AI disclosure, install the local agent workflow, and build the backend.
+- **OpenCode** (AI agent; model **claude-haiku-5-5**) — used to review the local Rafiki test node,
+  compare it with `origin/main` and prepare this documentation-only branch. No application code was
+  generated in this step.
 - **Previous AI assistants** — the original prototype (Next.js + Prisma + SMS providers + mock mode)
   was generated with AI assistance before the reset. That code was removed from the working tree and
   is preserved only in git history.
@@ -37,6 +40,16 @@ tools were used, for what, and where in the project. The real prompts are stored
   the payment service (`backend/src/payments/service.ts`) — the team will read, correct and test the
   Open Payments flow itself as the lowest-AI part of the codebase.
 
+### 5. Rafiki test-node review (analysis only)
+
+- The agent checked the local Rafiki v2.4.5 test node (`docker`, signed read-only admin query,
+  secrets handling and the Docker compose file) and compared the team's Open Payments design with
+  an alternative platform-managed account model.
+- The alternative model was not adopted. Its prompts are kept as history
+  (`prompts/2026-10-16-cuentas-sms-rafiki-propio.md`). No code from that branch is in `main`.
+- Files with AI-generated text in this step: `AI_USAGE.md` and `prompts/` (the index and the prompt
+  logs). No application code changed.
+
 ## What we did ourselves
 
 - Defined the scope, the stack and the cuts.
@@ -53,5 +66,10 @@ See [`prompts/`](prompts/):
 - [`prompts/2026-10-16-cierre-bootstrap.md`](prompts/2026-10-16-cierre-bootstrap.md)
 - [`prompts/2026-10-16-specs-backend.md`](prompts/2026-10-16-specs-backend.md)
 - [`prompts/2026-10-16-english-convention.md`](prompts/2026-10-16-english-convention.md)
+- [`prompts/2026-10-16-alcance-cop.md`](prompts/2026-10-16-alcance-cop.md)
+- [`prompts/2026-10-16-cuentas-sms-rafiki-propio.md`](prompts/2026-10-16-cuentas-sms-rafiki-propio.md)
+- [`prompts/2026-10-16-entorno-testnet.md`](prompts/2026-10-16-entorno-testnet.md)
+- [`prompts/2026-10-16-integracion-rafiki.md`](prompts/2026-10-16-integracion-rafiki.md)
+- [`prompts/2026-10-16-webhook-twilio.md`](prompts/2026-10-16-webhook-twilio.md)
 
 > Note: update this file whenever AI touches new code.

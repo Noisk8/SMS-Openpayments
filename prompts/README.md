@@ -14,5 +14,12 @@ AI Policy. One file per topic/session.
   (SMS + Open Payments).
 - [`2026-10-16-english-convention.md`](2026-10-16-english-convention.md) — switching commits and docs
   to English.
+- [`2026-10-16-alcance-cop.md`](2026-10-16-alcance-cop.md) — project scope: SMS accounts and COP.
+- [`2026-10-16-cuentas-sms-rafiki-propio.md`](2026-10-16-cuentas-sms-rafiki-propio.md) — proposal for
+  platform-managed COP accounts on a Rafiki instance operated by the team (not adopted; see the Open Payments model).
+- [`2026-10-16-entorno-testnet.md`](2026-10-16-entorno-testnet.md) — testnet environment setup.
+- [`2026-10-16-integracion-rafiki.md`](2026-10-16-integracion-rafiki.md) — Rafiki integration status
+  review and repository integration with `origin/main`.
+- [`2026-10-16-webhook-twilio.md`](2026-10-16-webhook-twilio.md) — SMS webhook and Twilio adapter.
 
 Convention: `YYYY-MM-DD-topic.md`, with the prompt exactly as sent plus the relevant team answers.
