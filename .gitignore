@@ -1,10 +1,7 @@
 # dependencias y builds
 node_modules/
-.next/
-out/
 dist/
 coverage/
-next-env.d.ts
 *.tsbuildinfo
 
 # entorno y secretos
@@ -14,11 +11,29 @@ next-env.d.ts
 *.pem
 keys/
 
-# Prisma generado
-src/generated/
+# Workflow de agentes — SOLO LOCAL.
+# Cada integrante instala y configura el suyo; nada de esto se versiona.
+.opencode/
+.agent-workflow/
+.review/
+docs/agent-workflow/
+scripts/harness/
+scripts/verify.sh
+scripts/verify-full.sh
 
-# pruebas
-.tmp-test-db/
+# Configuración personal de asistentes / editores con IA
+.cursor/
+.claude/
+.codex/
+.windsurf/
+.continue/
+.aider*
+CLAUDE.md
+GEMINI.md
+.github/copilot-instructions.md
 
-# base local de desarrollo sin Docker
-.local-db/
+# agent-workflow:begin
+# Agent workflow runtime state (ephemeral, git-ignored)
+.worktrees/
+.orchestration/
+# agent-workflow:end

@@ -2,53 +2,13 @@
   "name": "sms-openpayments",
   "version": "0.1.0",
   "private": true,
-  "description": "Pagos por SMS en Colombia mediante Interledger y Open Payments",
+  "description": "Pagos por SMS en Colombia con Interledger y Open Payments",
+  "type": "module",
   "engines": {
-    "node": ">=20.9.0"
+    "node": ">=20"
   },
   "scripts": {
-    "dev": "next dev",
-    "build": "prisma generate && next build",
-    "start": "next start",
-    "lint": "eslint .",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
-    "db:migrate": "prisma migrate deploy",
-    "db:migrate:dev": "prisma migrate dev",
-    "db:seed": "tsx prisma/seed.ts",
-    "db:studio": "prisma studio",
-    "db:generate": "prisma generate",
-    "db:local": "node scripts/dev-db.mjs"
-  },
-  "dependencies": {
-    "@interledger/open-payments": "^7.4.0",
-    "@prisma/adapter-pg": "^7.10.0",
-    "@prisma/client": "^7.10.0",
-    "argon2": "^0.45.1",
-    "dotenv": "^17.4.2",
-    "next": "^16.4.1",
-    "pg": "^8.23.1",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "twilio": "^6.2.0",
-    "zod": "^4.6.7"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4.3.3",
-    "@types/node": "^22.20.5",
-    "@types/pg": "^8.23.1",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "@vitest/coverage-v8": "^3.2.7",
-    "embedded-postgres": "^18.4.0-beta.17",
-    "eslint": "^9.39.5",
-    "eslint-config-next": "^16.4.1",
-    "postcss": "^8.5.30",
-    "prisma": "^7.10.0",
-    "tailwindcss": "^4.3.3",
-    "tsx": "^4.23.15",
-    "typescript": "^5.9.3",
-    "vitest": "^3.2.7"
+    "test": "node --test",
+    "verify": "node --test"
   }
 }
