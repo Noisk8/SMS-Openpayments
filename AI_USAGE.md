@@ -94,6 +94,7 @@ See [`prompts/`](prompts/):
 - [`prompts/2026-10-16-demo-wallet-pool.md`](prompts/2026-10-16-demo-wallet-pool.md)
 - [`prompts/2026-10-16-demo-external-recipient.md`](prompts/2026-10-16-demo-external-recipient.md)
 - [`prompts/2026-10-16-relayion-provider.md`](prompts/2026-10-16-relayion-provider.md)
+- [`prompts/2026-10-16-mvp-comandos-sms.md`](prompts/2026-10-16-mvp-comandos-sms.md)
 
 > Note: update this file whenever AI touches new code.
 
@@ -284,3 +285,25 @@ outbound replies through `POST /api/v1/outbound`.
   provider-error mapping (retryable `PROVIDER_ERROR` vs terminal `VALIDATION_FAILED`) still need a
   human review against the Relayion console. Prompt recorded verbatim in
   [`prompts/2026-10-16-relayion-provider.md`](prompts/2026-10-16-relayion-provider.md).
+
+## SMS MVP short commands (2026-10-16)
+
+OpenCode (agent; model **DeepSeek V4.1 Flash**), delegated implementation worker on branch
+`task/T-mvp-commands`, added the short SMS command interface (`P <amount> <destination>`, a bare
+4-digit confirmation code, `0` cancel, `1` last payment, `2` destinations, `9` help) on top of the
+existing long commands, which keep working as compatible alternatives.
+
+- AI-generated, pending human review: `backend/src/sms/command-service.ts` (parser + engine +
+  replies), `backend/src/sms/commands.ts` (short help in the dev simulator),
+  `backend/src/recipients/service.ts` (permanent per-user destination numbers, resolve by number or
+  alias), `backend/src/db/migrations/008_sms_mvp.sql` (new: `recipients.number`,
+  `recipient_counters`, `sms_confirmation_codes`), `backend/docs/sms-commands.md` (new) and
+  `backend/tests/mvp-commands.test.ts` (new, 21 cases).
+- The final wording dropped the currency from every reply (it is always COP), as the team requested;
+  `backend/tests/commands.test.ts` was updated accordingly.
+- Design points to review by hand: the permanent numbering scheme (monotonic `recipient_counters`
+  plus a `UNIQUE (user_id, number)` index), the per-user confirmation-code registry that prevents
+  reusing a code for another payment when an SMS arrives late, and the automatic expiry of a lapsed
+  pending payment.
+- `frontend/**` was not touched. Prompt recorded verbatim in
+  [`prompts/2026-10-16-mvp-comandos-sms.md`](prompts/2026-10-16-mvp-comandos-sms.md).

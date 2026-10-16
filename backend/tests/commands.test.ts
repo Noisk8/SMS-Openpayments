@@ -64,10 +64,11 @@ describe("SMS command service", () => {
       [senderWallet.walletAddress, senderWallet.authServer, senderWallet.resourceServer],
     );
     await db.run(
-      `INSERT INTO recipients (id, user_id, alias, wallet_address, currency, asset_scale)
-       VALUES ('r1', 'u1', 'bob', ?, 'COP', 0)`,
+      `INSERT INTO recipients (id, user_id, number, alias, wallet_address, currency, asset_scale)
+       VALUES ('r1', 'u1', 1, 'bob', ?, 'COP', 0)`,
       [recipientWallet.walletAddress],
     );
+    await db.run(`INSERT INTO recipient_counters (user_id, next_number) VALUES ('u1', 2)`);
     provider.registerWallet(senderWallet, { balance: cop("100000"), grantLimit: cop("100000") });
     provider.registerWallet(recipientWallet);
   }
@@ -195,9 +196,10 @@ describe("SMS command service", () => {
     expect(res.state).toBe("AWAITING_CONFIRMATION");
     expect(res.reply).toContain("bob");
     expect(res.reply).toContain(recipientWallet.walletAddress);
-    // Currency is shown explicitly for both amounts even when omitted by the user.
-    expect(res.reply).toContain("Envías: 5000 COP");
-    expect(res.reply).toContain("Recibe: 5000 COP");
+    // Amounts are shown in major units without repeating the wallet currency.
+    expect(res.reply).toContain("Envías: 5000");
+    expect(res.reply).toContain("Recibe: 5000");
+    expect(res.reply).not.toContain("COP");
 
     const code = codeFrom(res.reply);
     expect(code).toMatch(/^\d{4}$/);
@@ -212,7 +214,8 @@ describe("SMS command service", () => {
 
   it("usa la moneda de la wallet y rechaza una moneda distinta", async () => {
     const ok = await run("PAGAR 5000 A bob");
-    expect(ok.reply).toContain("COP");
+    expect(ok.reply).toContain("Envías: 5000");
+    expect(ok.reply).not.toContain("COP");
 
     const mismatch = await run("PAGAR 5000 USD A bob");
     expect(mismatch.reply).toMatch(/no coincide/i);
@@ -248,7 +251,8 @@ describe("SMS command service", () => {
     const sent = sms.outbox[0];
     expect(sent?.to).toBe(SENDER_PHONE);
     expect(sent?.text).toContain("bob");
-    expect(sent?.text).toContain("5000 COP");
+    expect(sent?.text).toContain("5000");
+    expect(sent?.text).not.toContain("COP");
     expect((await paymentRow()).state).toBe("AWAITING_CONFIRMATION");
 
     const processed = await db.get<{ processed_at: string | null }>(
@@ -264,7 +268,8 @@ describe("SMS command service", () => {
 
     const confirm = await run(`CONFIRMAR ${code}`);
     expect(confirm.reply).toMatch(/venci/i);
-    expect((await paymentRow()).state).toBe("AWAITING_CONFIRMATION");
+    // A lapsed code expires the payment automatically so a new one can be created.
+    expect((await paymentRow()).state).toBe("EXPIRED");
   });
 
   it("limita los intentos y bloquea incluso el código correcto", async () => {

@@ -31,5 +31,7 @@ AI Policy. One file per topic/session.
   external payment destination for the demo wallet pool.
 - [`2026-10-16-relayion-provider.md`](2026-10-16-relayion-provider.md) — Relayion SMS provider
   adapter (signed webhooks, body enrichment, outbound sends).
+- [`2026-10-16-mvp-comandos-sms.md`](2026-10-16-mvp-comandos-sms.md) — SMS MVP short command
+  interface (numbered recipients, confirm by code).
 
 Convention: `YYYY-MM-DD-topic.md`, with the prompt exactly as sent plus the relevant team answers.
