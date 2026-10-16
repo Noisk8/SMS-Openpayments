@@ -53,18 +53,21 @@ describe("SMS command service", () => {
   let deps: CommandServiceDeps;
   let counter: number;
 
-  function seed(): void {
-    db.prepare(
+  async function seed(): Promise<void> {
+    await db.run(
       `INSERT INTO users (id, phone, phone_verified_at, status) VALUES ('u1', ?, ?, 'active')`,
-    ).run(SENDER_PHONE, nowIso());
-    db.prepare(
+      [SENDER_PHONE, nowIso()],
+    );
+    await db.run(
       `INSERT INTO wallets (id, user_id, wallet_address, currency, asset_scale, auth_server, resource_server)
        VALUES ('w1', 'u1', ?, 'COP', 0, ?, ?)`,
-    ).run(senderWallet.walletAddress, senderWallet.authServer, senderWallet.resourceServer);
-    db.prepare(
+      [senderWallet.walletAddress, senderWallet.authServer, senderWallet.resourceServer],
+    );
+    await db.run(
       `INSERT INTO recipients (id, user_id, alias, wallet_address, currency, asset_scale)
        VALUES ('r1', 'u1', 'bob', ?, 'COP', 0)`,
-    ).run(recipientWallet.walletAddress);
+      [recipientWallet.walletAddress],
+    );
     provider.registerWallet(senderWallet, { balance: cop("100000"), grantLimit: cop("100000") });
     provider.registerWallet(recipientWallet);
   }
@@ -88,21 +91,22 @@ describe("SMS command service", () => {
     });
     expect(granted).not.toBeNull();
     const token = (granted as GrantedAccess).accessToken;
-    db.prepare(
+    await db.run(
       `INSERT INTO grants
          (id, wallet_id, status, scopes, limit_value, limit_currency, limit_scale,
           access_token_enc, expires_at, created_at, updated_at)
        VALUES (?, 'w1', 'GRANTED', ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      `g-${counter}`,
-      JSON.stringify(["outgoing-payment"]),
-      limit.value,
-      limit.currency,
-      limit.assetScale,
-      secretBox.encrypt(token),
-      granted?.expiresAt ?? null,
-      nowIso(),
-      nowIso(),
+      [
+        `g-${counter}`,
+        JSON.stringify(["outgoing-payment"]),
+        limit.value,
+        limit.currency,
+        limit.assetScale,
+        secretBox.encrypt(token),
+        granted?.expiresAt ?? null,
+        nowIso(),
+        nowIso(),
+      ],
     );
     return token;
   }
@@ -125,22 +129,22 @@ describe("SMS command service", () => {
     return match?.[1] as string;
   };
 
-  const paymentRow = (): PaymentRowLike =>
-    db.prepare(`SELECT * FROM payments`).get() as PaymentRowLike;
+  const paymentRow = async (): Promise<PaymentRowLike> =>
+    (await db.get<PaymentRowLike>(`SELECT * FROM payments`)) as PaymentRowLike;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     config = testConfig();
-    db = testDb();
+    db = await testDb();
     provider = new FakePaymentProvider();
     sms = new MockSmsProvider(config.SMS_WEBHOOK_SECRET);
     secretBox = new SecretBox(generateEncryptionKey());
     counter = 0;
-    seed();
+    await seed();
     deps = { config, db, provider, sms, secretBox };
   });
 
-  afterEach(() => {
-    db.close();
+  afterEach(async () => {
+    await db.close();
   });
 
   it("responde AYUDA y rechaza comandos desconocidos", async () => {
@@ -158,18 +162,19 @@ describe("SMS command service", () => {
     const stranger = await run("PAGAR 5000 A bob", "+579999999999");
     expect(stranger.reply).toMatch(/no encontramos/i);
 
-    db.prepare(`INSERT INTO users (id, phone, status) VALUES ('u2', '+573009998877', 'pending')`).run();
+    await db.run(`INSERT INTO users (id, phone, status) VALUES ('u2', '+573009998877', 'pending')`);
     const unverified = await run("PAGAR 5000 A bob", "+573009998877");
     expect(unverified.reply).toMatch(/no está verificado/i);
 
-    db.prepare(
+    await db.run(
       `INSERT INTO users (id, phone, phone_verified_at, status) VALUES ('u3', '+573007776655', ?, 'suspended')`,
-    ).run(nowIso());
+      [nowIso()],
+    );
     const suspended = await run("PAGAR 5000 A bob", "+573007776655");
     expect(suspended.reply).toMatch(/suspendida/i);
 
-    const count = db.prepare(`SELECT COUNT(*) AS n FROM payments`).get() as { n: number };
-    expect(count.n).toBe(0);
+    const count = await db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM payments`);
+    expect(count?.n).toBe(0);
   });
 
   it("PAGAR crea AWAITING_CONFIRMATION y almacena solo el hash del código", async () => {
@@ -184,7 +189,7 @@ describe("SMS command service", () => {
     const code = codeFrom(res.reply);
     expect(code).toMatch(/^\d{4}$/);
 
-    const row = paymentRow();
+    const row = await paymentRow();
     expect(row.state).toBe("AWAITING_CONFIRMATION");
     expect(row.confirmation_hash).toBeTruthy();
     expect(row.confirmation_hash).not.toContain(code);
@@ -199,8 +204,8 @@ describe("SMS command service", () => {
     const mismatch = await run("PAGAR 5000 USD A bob");
     expect(mismatch.reply).toMatch(/no coincide/i);
 
-    const count = db.prepare(`SELECT COUNT(*) AS n FROM payments`).get() as { n: number };
-    expect(count.n).toBe(1);
+    const count = await db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM payments`);
+    expect(count?.n).toBe(1);
   });
 
   it("parsea montos según la escala del activo", () => {
@@ -213,7 +218,7 @@ describe("SMS command service", () => {
   });
 
   it("el handler process_inbound_sms envía el SMS de confirmación con ambos montos", async () => {
-    persistInboundSms(db, {
+    await persistInboundSms(db, {
       provider: sms.name,
       messageId: "msg-pay-1",
       from: SENDER_PHONE,
@@ -231,22 +236,22 @@ describe("SMS command service", () => {
     expect(sent?.to).toBe(SENDER_PHONE);
     expect(sent?.text).toContain("bob");
     expect(sent?.text).toContain("5000 COP");
-    expect(paymentRow().state).toBe("AWAITING_CONFIRMATION");
+    expect((await paymentRow()).state).toBe("AWAITING_CONFIRMATION");
 
-    const processed = db
-      .prepare(`SELECT processed_at FROM sms_messages WHERE direction = 'inbound' LIMIT 1`)
-      .get() as { processed_at: string | null };
-    expect(processed.processed_at).not.toBeNull();
+    const processed = await db.get<{ processed_at: string | null }>(
+      `SELECT processed_at FROM sms_messages WHERE direction = 'inbound' LIMIT 1`,
+    );
+    expect(processed?.processed_at).not.toBeNull();
   });
 
   it("rechaza un código vencido sin ejecutar", async () => {
     const res = await run("PAGAR 5000 A bob");
     const code = codeFrom(res.reply);
-    db.prepare(`UPDATE payments SET confirmation_expires_at = ?`).run("2000-01-01T00:00:00.000Z");
+    await db.run(`UPDATE payments SET confirmation_expires_at = ?`, ["2000-01-01T00:00:00.000Z"]);
 
     const confirm = await run(`CONFIRMAR ${code}`);
     expect(confirm.reply).toMatch(/venci/i);
-    expect(paymentRow().state).toBe("AWAITING_CONFIRMATION");
+    expect((await paymentRow()).state).toBe("AWAITING_CONFIRMATION");
   });
 
   it("limita los intentos y bloquea incluso el código correcto", async () => {
@@ -262,7 +267,7 @@ describe("SMS command service", () => {
     const blocked = await run(`CONFIRMAR ${code}`);
     expect(blocked.reply).toMatch(/demasiados intentos/i);
 
-    const row = paymentRow();
+    const row = await paymentRow();
     expect(row.confirmation_attempts).toBe(5);
     expect(row.state).toBe("AWAITING_CONFIRMATION");
   });
@@ -287,7 +292,7 @@ describe("SMS command service", () => {
     const second = await run(`CONFIRMAR ${code}`);
     expect(second.reply).toMatch(/no tienes pagos pendientes/i);
     expect(created).toHaveLength(1);
-    expect(paymentRow().state).toBe("PROCESSING");
+    expect((await paymentRow()).state).toBe("PROCESSING");
   });
 
   it("no reporta COMPLETED hasta que el proveedor confirma el recurso", async () => {
@@ -299,7 +304,7 @@ describe("SMS command service", () => {
     expect(confirm.state).toBe("PROCESSING");
     expect(confirm.reply).not.toMatch(/completad/i);
 
-    const outgoingId = paymentRow().outgoing_payment_id as string;
+    const outgoingId = (await paymentRow()).outgoing_payment_id as string;
     provider.setOutgoingPaymentStatus(outgoingId, "COMPLETED");
     const confirmed = await refreshPaymentStatus(
       { db, provider },
@@ -316,13 +321,13 @@ describe("SMS command service", () => {
     expect(confirm.reply).toContain("/interact/");
     expect(confirm.state).toBe("AWAITING_CONFIRMATION");
 
-    const row = paymentRow();
+    const row = await paymentRow();
     expect(row.state).toBe("AWAITING_CONFIRMATION");
     expect(row.outgoing_payment_id).toBeNull();
 
-    const grant = db
-      .prepare(`SELECT status FROM grants WHERE status = 'PENDING_INTERACTION'`)
-      .get() as { status: string } | undefined;
+    const grant = await db.get<{ status: string }>(
+      `SELECT status FROM grants WHERE status = 'PENDING_INTERACTION'`,
+    );
     expect(grant?.status).toBe("PENDING_INTERACTION");
   });
 
@@ -333,11 +338,11 @@ describe("SMS command service", () => {
 
     const rejected = await run(`CANCELAR ${wrong}`);
     expect(rejected.reply).toMatch(/incorrecto|no cancelable/i);
-    expect(paymentRow().state).toBe("AWAITING_CONFIRMATION");
+    expect((await paymentRow()).state).toBe("AWAITING_CONFIRMATION");
 
     const cancelled = await run(`CANCELAR ${code}`);
     expect(cancelled.state).toBe("CANCELLED");
-    expect(paymentRow().state).toBe("CANCELLED");
+    expect((await paymentRow()).state).toBe("CANCELLED");
 
     const confirmAfter = await run(`CONFIRMAR ${code}`);
     expect(confirmAfter.reply).toMatch(/no tienes pagos pendientes/i);
@@ -345,15 +350,16 @@ describe("SMS command service", () => {
 
   it("ESTADO solo devuelve pagos del remitente", async () => {
     const res = await run("PAGAR 5000 A bob");
-    const reference = paymentRow().reference;
+    const reference = (await paymentRow()).reference;
 
     const own = await run(`ESTADO ${reference}`);
     expect(own.reply).toContain(reference);
     expect(own.reply).toMatch(/pendiente de confirmación/i);
 
-    db.prepare(
+    await db.run(
       `INSERT INTO users (id, phone, phone_verified_at, status) VALUES ('u9', '+573001110000', ?, 'active')`,
-    ).run(nowIso());
+      [nowIso()],
+    );
     const other = await run(`ESTADO ${reference}`, "+573001110000");
     expect(other.reply).toMatch(/no encontramos un pago/i);
 

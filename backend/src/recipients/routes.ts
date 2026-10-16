@@ -46,13 +46,13 @@ export function registerRecipientRoutes(app: FastifyInstance, deps: RecipientRou
 
   app.get("/admin/users/:id/recipients", { preHandler: admin }, async (request, reply) => {
     const params = userIdParams.parse(request.params);
-    return reply.send({ recipients: listRecipients(deps.db, params.id) });
+    return reply.send({ recipients: await listRecipients(deps.db, params.id) });
   });
 
   // Resolves an existing alias to its stored (already resolved) wallet.
   app.get("/admin/users/:id/recipients/:alias/resolve", { preHandler: admin }, async (request, reply) => {
     const params = aliasParams.parse(request.params);
-    const recipient = getRecipientByAlias(deps.db, params.id, params.alias);
+    const recipient = await getRecipientByAlias(deps.db, params.id, params.alias);
     if (!recipient) {
       throw new AppError("NOT_FOUND", "No existe un destinatario con ese alias.");
     }

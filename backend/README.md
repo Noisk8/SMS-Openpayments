@@ -9,7 +9,7 @@ executes payments with Open Payments (`@interledger/open-payments`).
 |---|---|
 | Runtime | Node.js >= 20 + TypeScript |
 | HTTP | Fastify |
-| Database | SQLite + better-sqlite3 (raw SQL, no ORM) |
+| Database | PostgreSQL + `pg` (raw SQL, no ORM) |
 | Validation | Zod |
 | Payments | `@interledger/open-payments` |
 | Tests | Vitest |
@@ -19,8 +19,8 @@ executes payments with Open Payments (`@interledger/open-payments`).
 ```sh
 cd backend
 npm install
-cp .env.example .env      # adjust values
-npm run db:migrate        # apply the SQLite schema
+cp .env.example .env      # adjust values; set DATABASE_URL to your Postgres
+npm run db:migrate        # apply the PostgreSQL schema
 npm run dev               # http://localhost:3000
 ```
 
@@ -74,14 +74,14 @@ src/
   db/                  connection, migrations (SQL) and helpers
   sms/                 SMS gateway: routes, service, commands, providers
   payments/            payments service + Open Payments adapter (boundary: types.ts)
-  jobs/                persistent queue over SQLite
+  jobs/                persistent queue over PostgreSQL
   security/            AES-256-GCM encryption of credentials
 tests/
 ```
 
 ## Status (iteration 1)
 
-- [x] Full SQLite schema (users, wallets, recipients, grants, payments, sms_messages, jobs, audit_events)
+- [x] Full PostgreSQL schema (users, wallets, recipients, grants, payments, sms_messages, jobs, audit_events)
 - [x] Zod config, secret encryption, persistent job queue
 - [x] SMS gateway: signed webhook, persistence, deduplication, dev simulator
 - [ ] Full command service (PAGAR/CONFIRMAR/CANCELAR/ESTADO)

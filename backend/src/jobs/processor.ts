@@ -71,13 +71,12 @@ export class JobProcessor {
    */
   async recoverExpiredLeases(): Promise<number> {
     const now = this.nowIso();
-    const expired = this.db
-      .prepare(
-        `SELECT * FROM jobs
-          WHERE status = 'leased' AND lease_until IS NOT NULL AND lease_until < ?
-          ORDER BY next_run_at ASC`,
-      )
-      .all(now) as JobRow[];
+    const expired = await this.db.all<JobRow>(
+      `SELECT * FROM jobs
+        WHERE status = 'leased' AND lease_until IS NOT NULL AND lease_until < ?
+        ORDER BY next_run_at ASC`,
+      [now],
+    );
 
     let recovered = 0;
     for (const job of expired) {
@@ -88,13 +87,13 @@ export class JobProcessor {
       try {
         const outcome = await inspect(job);
         if (outcome === "complete") {
-          completeJob(this.db, job.id);
+          await completeJob(this.db, job.id);
         } else {
-          failJob(this.db, job.id, "Lease expirado: trabajo interrumpido", this.retryDelayMs);
+          await failJob(this.db, job.id, "Lease expirado: trabajo interrumpido", this.retryDelayMs);
         }
         recovered += 1;
       } catch (error) {
-        failJob(this.db, job.id, `Recuperación fallida: ${errorMessage(error)}`, this.retryDelayMs);
+        await failJob(this.db, job.id, `Recuperación fallida: ${errorMessage(error)}`, this.retryDelayMs);
         recovered += 1;
       }
     }
@@ -106,25 +105,25 @@ export class JobProcessor {
    * había trabajo disponible (útil como `while (await runOnce()) {}`).
    */
   async runOnce(): Promise<boolean> {
-    const job = claimNextJob(this.db, this.nowIso(), this.leaseMs);
+    const job = await claimNextJob(this.db, this.nowIso(), this.leaseMs);
     if (!job) {
       return false;
     }
 
     const handler = this.handlers.get(job.type);
     if (!handler) {
-      failJob(this.db, job.id, `No hay handler registrado para el tipo "${job.type}"`, this.retryDelayMs);
+      await failJob(this.db, job.id, `No hay handler registrado para el tipo "${job.type}"`, this.retryDelayMs);
       return true;
     }
 
-    // attempts > 1 significa que este trabajo ya se había reclamado antes:
-    // es un reintento o un lease interrumpido y debe inspeccionarse.
+    // attempts > 1 means this job was already claimed before: it is a retry or
+    // an interrupted lease and must be inspected rather than replayed blindly.
     const context: JobHandlerContext = { recovered: job.attempts > 1 };
     try {
       await handler(job, context);
-      completeJob(this.db, job.id);
+      await completeJob(this.db, job.id);
     } catch (error) {
-      failJob(this.db, job.id, errorMessage(error), this.retryDelayMs);
+      await failJob(this.db, job.id, errorMessage(error), this.retryDelayMs);
     }
     return true;
   }

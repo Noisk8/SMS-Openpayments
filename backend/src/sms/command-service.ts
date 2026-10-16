@@ -140,7 +140,7 @@ export async function runCommand(deps: CommandServiceDeps, sms: InboundSms): Pro
     return { reply: UNKNOWN_COMMAND_REPLY };
   }
 
-  const auth = authenticate(deps.db, sms.from);
+  const auth = await authenticate(deps.db, sms.from);
   if ("reply" in auth) {
     return auth;
   }
@@ -163,14 +163,14 @@ export async function runCommand(deps: CommandServiceDeps, sms: InboundSms): Pro
 type AuthResult = { user: UserRow } | { reply: string };
 
 /** Resolves an active, verified user by the sender phone (spec §6). */
-function authenticate(db: Db, from: string): AuthResult {
+async function authenticate(db: Db, from: string): Promise<AuthResult> {
   let phone: string;
   try {
     phone = normalizePhone(from);
   } catch {
     return { reply: NOT_REGISTERED_REPLY };
   }
-  const row = db.prepare(`SELECT * FROM users WHERE phone = ?`).get(phone) as UserRow | undefined;
+  const row = await db.get<UserRow>(`SELECT * FROM users WHERE phone = ?`, [phone]);
   if (!row) {
     return { reply: NOT_REGISTERED_REPLY };
   }
@@ -190,7 +190,7 @@ async function handlePay(
   user: UserRow,
   command: Extract<ParsedCommand, { kind: "pay" }>,
 ): Promise<CommandOutcome> {
-  const wallet = latestWallet(deps.db, user.id);
+  const wallet = await latestWallet(deps.db, user.id);
   if (!wallet) {
     return { reply: NO_WALLET_REPLY };
   }
@@ -207,7 +207,7 @@ async function handlePay(
   }
   const debitAmount: Amount = { value, currency: wallet.currency, assetScale: wallet.asset_scale };
 
-  const recipient = getRecipientByAlias(deps.db, user.id, command.alias);
+  const recipient = await getRecipientByAlias(deps.db, user.id, command.alias);
   if (!recipient) {
     return { reply: `No existe un destinatario con el alias "${command.alias}".` };
   }
@@ -227,18 +227,12 @@ async function handlePay(
   }
 
   const code = String(randomInt(0, 10_000)).padStart(4, "0");
-  deps.db
-    .prepare(
-      `UPDATE payments
-          SET confirmation_hash = ?, confirmation_expires_at = ?, confirmation_attempts = 0, updated_at = ?
-        WHERE id = ?`,
-    )
-    .run(
-      hashConfirmationCode(code),
-      isoPlusSeconds(CONFIRMATION_TTL_SECONDS),
-      nowIso(),
-      payment.id,
-    );
+  await deps.db.run(
+    `UPDATE payments
+        SET confirmation_hash = ?, confirmation_expires_at = ?, confirmation_attempts = 0, updated_at = ?
+      WHERE id = ?`,
+    [hashConfirmationCode(code), isoPlusSeconds(CONFIRMATION_TTL_SECONDS), nowIso(), payment.id],
+  );
 
   return {
     reply: confirmationPrompt(command.alias, recipient.wallet_address, payment.debitAmount, payment.receiveAmount, code),
@@ -267,7 +261,7 @@ function confirmationPrompt(
 // --- CONFIRMAR --------------------------------------------------------------
 
 async function handleConfirm(deps: CommandServiceDeps, user: UserRow, code: string): Promise<CommandOutcome> {
-  const candidates = pendingPayments(deps.db, user.id);
+  const candidates = await pendingPayments(deps.db, user.id);
   if (candidates.length === 0) {
     return { reply: NOTHING_PENDING_REPLY };
   }
@@ -294,9 +288,10 @@ async function handleConfirm(deps: CommandServiceDeps, user: UserRow, code: stri
     };
   }
   if (!verifyConfirmationCode(code, payment.confirmation_hash)) {
-    deps.db
-      .prepare(`UPDATE payments SET confirmation_attempts = confirmation_attempts + 1, updated_at = ? WHERE id = ?`)
-      .run(nowIso(), payment.id);
+    await deps.db.run(
+      `UPDATE payments SET confirmation_attempts = confirmation_attempts + 1, updated_at = ? WHERE id = ?`,
+      [nowIso(), payment.id],
+    );
     const remaining = CONFIRMATION_MAX_ATTEMPTS - (payment.confirmation_attempts + 1);
     return { reply: `Código incorrecto. Intentos restantes: ${remaining}.`, paymentId: payment.id };
   }
@@ -342,8 +337,8 @@ function outcomeReply(state: PaymentState, lastError: string | null): string {
 
 // --- CANCELAR ---------------------------------------------------------------
 
-function handleCancel(deps: CommandServiceDeps, user: UserRow, code: string): CommandOutcome {
-  const candidates = pendingPayments(deps.db, user.id);
+async function handleCancel(deps: CommandServiceDeps, user: UserRow, code: string): Promise<CommandOutcome> {
+  const candidates = await pendingPayments(deps.db, user.id);
   if (candidates.length === 0) {
     return { reply: "No tienes pagos pendientes de cancelación." };
   }
@@ -355,13 +350,12 @@ function handleCancel(deps: CommandServiceDeps, user: UserRow, code: string): Co
     return { reply: "Código incorrecto o pago no cancelable.", paymentId: payment.id, state: payment.state };
   }
 
-  const result = deps.db
-    .prepare(
-      `UPDATE payments
-          SET state = 'CANCELLED', confirmation_hash = NULL, confirmation_expires_at = NULL, updated_at = ?
-        WHERE id = ? AND state = 'AWAITING_CONFIRMATION'`,
-    )
-    .run(nowIso(), payment.id);
+  const result = await deps.db.run(
+    `UPDATE payments
+        SET state = 'CANCELLED', confirmation_hash = NULL, confirmation_expires_at = NULL, updated_at = ?
+      WHERE id = ? AND state = 'AWAITING_CONFIRMATION'`,
+    [nowIso(), payment.id],
+  );
   if (result.changes === 0) {
     return { reply: "El pago ya no se puede cancelar.", paymentId: payment.id };
   }
@@ -370,10 +364,11 @@ function handleCancel(deps: CommandServiceDeps, user: UserRow, code: string): Co
 
 // --- ESTADO -----------------------------------------------------------------
 
-function handleStatus(deps: CommandServiceDeps, user: UserRow, reference: string): CommandOutcome {
-  const row = deps.db
-    .prepare(`SELECT * FROM payments WHERE reference = ? AND sender_user_id = ?`)
-    .get(reference, user.id) as PaymentRow | undefined;
+async function handleStatus(deps: CommandServiceDeps, user: UserRow, reference: string): Promise<CommandOutcome> {
+  const row = await deps.db.get<PaymentRow>(
+    `SELECT * FROM payments WHERE reference = ? AND sender_user_id = ?`,
+    [reference, user.id],
+  );
   if (!row) {
     return { reply: "No encontramos un pago con esa referencia en tu cuenta." };
   }
@@ -414,11 +409,11 @@ type AccessResolution =
  * returns the interact URL instead of executing the payment (spec §9, §13).
  */
 async function resolveOutgoingAccess(deps: CommandServiceDeps, payment: PaymentRow): Promise<AccessResolution> {
-  const walletRow = getWalletRow(deps.db, payment.sender_wallet_id);
+  const walletRow = await getWalletRow(deps.db, payment.sender_wallet_id);
   if (!walletRow) {
     return { kind: "unavailable", reply: "No se encontró la wallet emisora del pago." };
   }
-  const stored = findValidGrant(deps, payment.sender_wallet_id);
+  const stored = await findValidGrant(deps, payment.sender_wallet_id);
   if (stored) {
     return { kind: "granted", accessToken: stored };
   }
@@ -445,7 +440,7 @@ async function resolveOutgoingAccess(deps: CommandServiceDeps, payment: PaymentR
   });
 
   if (requested.kind === "granted") {
-    storeGrant(deps, {
+    await storeGrant(deps, {
       id: grantId,
       walletId: payment.sender_wallet_id,
       status: "GRANTED",
@@ -456,7 +451,7 @@ async function resolveOutgoingAccess(deps: CommandServiceDeps, payment: PaymentR
     return { kind: "granted", accessToken: requested.accessToken };
   }
 
-  storeGrant(deps, {
+  await storeGrant(deps, {
     id: grantId,
     walletId: payment.sender_wallet_id,
     status: "PENDING_INTERACTION",
@@ -469,17 +464,16 @@ async function resolveOutgoingAccess(deps: CommandServiceDeps, payment: PaymentR
 }
 
 /** Decrypts the newest non-expired stored grant token, or null when none is usable. */
-function findValidGrant(deps: CommandServiceDeps, walletId: string): string | null {
+async function findValidGrant(deps: CommandServiceDeps, walletId: string): Promise<string | null> {
   if (!deps.secretBox) {
     return null;
   }
-  const rows = deps.db
-    .prepare(
-      `SELECT access_token_enc, expires_at FROM grants
-        WHERE wallet_id = ? AND status = 'GRANTED' AND access_token_enc IS NOT NULL
-        ORDER BY created_at DESC, rowid DESC`,
-    )
-    .all(walletId) as Array<{ access_token_enc: string; expires_at: string | null }>;
+  const rows = await deps.db.all<{ access_token_enc: string; expires_at: string | null }>(
+    `SELECT access_token_enc, expires_at FROM grants
+      WHERE wallet_id = ? AND status = 'GRANTED' AND access_token_enc IS NOT NULL
+      ORDER BY created_at DESC, seq DESC`,
+    [walletId],
+  );
   for (const row of rows) {
     if (row.expires_at && isPast(row.expires_at)) {
       continue;
@@ -505,16 +499,14 @@ interface StoreGrantInput {
   expiresAt?: string | null;
 }
 
-function storeGrant(deps: CommandServiceDeps, input: StoreGrantInput): void {
+async function storeGrant(deps: CommandServiceDeps, input: StoreGrantInput): Promise<void> {
   const now = nowIso();
-  deps.db
-    .prepare(
-      `INSERT INTO grants
-         (id, wallet_id, status, scopes, limit_value, limit_currency, limit_scale,
-          access_token_enc, continue_uri, continue_token_enc, interact_url, expires_at, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
+  await deps.db.run(
+    `INSERT INTO grants
+       (id, wallet_id, status, scopes, limit_value, limit_currency, limit_scale,
+        access_token_enc, continue_uri, continue_token_enc, interact_url, expires_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
       input.id,
       input.walletId,
       input.status,
@@ -529,8 +521,9 @@ function storeGrant(deps: CommandServiceDeps, input: StoreGrantInput): void {
       input.expiresAt ?? null,
       now,
       now,
-    );
-  recordAudit(deps.db, input.status === "GRANTED" ? "grant.granted" : "grant.requested", "grant", input.id, {
+    ],
+  );
+  await recordAudit(deps.db, input.status === "GRANTED" ? "grant.granted" : "grant.requested", "grant", input.id, {
     via: "sms",
   });
 }
@@ -554,20 +547,20 @@ interface PaymentRow {
   confirmation_attempts: number;
 }
 
-function pendingPayments(db: Db, userId: string): PaymentRow[] {
-  return db
-    .prepare(
-      `SELECT * FROM payments
-        WHERE sender_user_id = ? AND state = 'AWAITING_CONFIRMATION'
-        ORDER BY created_at DESC, rowid DESC`,
-    )
-    .all(userId) as PaymentRow[];
+async function pendingPayments(db: Db, userId: string): Promise<PaymentRow[]> {
+  return db.all<PaymentRow>(
+    `SELECT * FROM payments
+      WHERE sender_user_id = ? AND state = 'AWAITING_CONFIRMATION'
+      ORDER BY created_at DESC, seq DESC`,
+    [userId],
+  );
 }
 
-function latestWallet(db: Db, userId: string): WalletRow | undefined {
-  return db
-    .prepare(`SELECT * FROM wallets WHERE user_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1`)
-    .get(userId) as WalletRow | undefined;
+async function latestWallet(db: Db, userId: string): Promise<WalletRow | undefined> {
+  return db.get<WalletRow>(
+    `SELECT * FROM wallets WHERE user_id = ? ORDER BY created_at DESC, seq DESC LIMIT 1`,
+    [userId],
+  );
 }
 
 /** Wraps the payment provider for the payment service boundary. */

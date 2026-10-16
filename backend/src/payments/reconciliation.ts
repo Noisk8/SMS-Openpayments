@@ -43,7 +43,7 @@ export async function reconcilePayment(
   deps: ReconciliationDeps,
   input: { paymentId: string; accessToken?: string },
 ): Promise<ReconcileItem> {
-  const payment = getPayment(deps.db, input.paymentId);
+  const payment = await getPayment(deps.db, input.paymentId);
   if (!payment) {
     throw new AppError("NOT_FOUND", `Pago no encontrado: ${input.paymentId}`);
   }
@@ -112,14 +112,13 @@ export async function reconcilePendingPayments(
   deps: ReconciliationDeps,
   options: { limit?: number; accessToken?: string } = {},
 ): Promise<ReconciliationResult> {
-  const rows = deps.db
-    .prepare(
-      `SELECT id FROM payments
-        WHERE state IN ('PROCESSING','NEEDS_REVIEW')
-        ORDER BY updated_at ASC
-        LIMIT ?`,
-    )
-    .all(options.limit ?? 50) as Array<{ id: string }>;
+  const rows = await deps.db.all<{ id: string }>(
+    `SELECT id FROM payments
+      WHERE state IN ('PROCESSING','NEEDS_REVIEW')
+      ORDER BY updated_at ASC
+      LIMIT ?`,
+    [options.limit ?? 50],
+  );
 
   const items: ReconcileItem[] = [];
   for (const row of rows) {

@@ -28,7 +28,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   const app = Fastify({ logger: deps.config.NODE_ENV !== "test" });
 
   app.get("/health", async () => {
-    deps.db.prepare("SELECT 1").get();
+    await deps.db.get("SELECT 1");
     return {
       status: "ok",
       smsProvider: deps.provider.name,

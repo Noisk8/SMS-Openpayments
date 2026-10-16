@@ -188,9 +188,9 @@ describe("onboarding y gestión de cuentas", () => {
     return { userId: user.id, grantId: connect.json().grant.id as string };
   }
 
-  beforeEach(() => {
+  beforeEach(async () => {
     config = testConfig();
-    db = testDb();
+    db = await testDb();
     provider = new FakePaymentProvider();
     secretBox = new SecretBox(generateEncryptionKey());
     app = buildTestApp();
@@ -198,7 +198,7 @@ describe("onboarding y gestión de cuentas", () => {
 
   afterEach(async () => {
     await app.close();
-    db.close();
+    await db.close();
   });
 
   it("crea un usuario y normaliza el teléfono", async () => {
@@ -235,19 +235,20 @@ describe("onboarding y gestión de cuentas", () => {
     expect(await verifyCode(user.id, "000000")).toBe(400);
 
     expect(await verifyCode(user.id, code)).toBe(200);
-    const row = db
-      .prepare("SELECT phone_verified_at, status FROM users WHERE id = ?")
-      .get(user.id) as { phone_verified_at: string | null; status: string };
-    expect(row.phone_verified_at).not.toBeNull();
-    expect(row.status).toBe("active");
+    const row = await db.get<{ phone_verified_at: string | null; status: string }>(
+      "SELECT phone_verified_at, status FROM users WHERE id = ?",
+      [user.id],
+    );
+    expect(row?.phone_verified_at).not.toBeNull();
+    expect(row?.status).toBe("active");
 
     // Expired code is rejected.
     const expired = await createUser("3001222222");
     const expiredCode = await requestCode(expired.id);
-    db.prepare("UPDATE phone_verifications SET expires_at = ? WHERE user_id = ?").run(
+    await db.run("UPDATE phone_verifications SET expires_at = ? WHERE user_id = ?", [
       "2000-01-01T00:00:00.000Z",
       expired.id,
-    );
+    ]);
     expect(await verifyCode(expired.id, expiredCode)).toBe(400);
 
     // Attempt limit blocks even the correct code.
@@ -429,9 +430,9 @@ describe("onboarding y gestión de cuentas", () => {
       url: `/auth/callback?grant_id=${pendingId}&interact_ref=bad-ref`,
     });
     expect(rejected.statusCode).toBe(400);
-    const stillPending = db
-      .prepare("SELECT status FROM grants WHERE id = ?")
-      .get(pendingId) as { status: string };
-    expect(stillPending.status).toBe("PENDING_INTERACTION");
+    const stillPending = await db.get<{ status: string }>("SELECT status FROM grants WHERE id = ?", [
+      pendingId,
+    ]);
+    expect(stillPending?.status).toBe("PENDING_INTERACTION");
   });
 });

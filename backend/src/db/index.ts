@@ -1,19 +1,26 @@
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
-import { openDatabase, type Db } from "./connection";
+import { createPoolDatabase, type Db } from "./connection";
 import { migrate } from "./migrate";
 
-export type { Db } from "./connection";
+export type { Db, Queryable, RunResult } from "./connection";
+export { rewritePlaceholders } from "./connection";
 
-/** Abre (o crea) la base y aplica migraciones. `:memory:` para pruebas. */
-export function createDatabase(path: string, options: { migrate?: boolean } = {}): Db {
+/**
+ * Opens a pooled Postgres connection and (by default) applies pending
+ * migrations. Every operation is asynchronous.
+ */
+export async function createDatabase(
+  databaseUrl: string,
+  options: { migrate?: boolean } = {},
+): Promise<Db> {
   const shouldMigrate = options.migrate ?? true;
-  if (path !== ":memory:") {
-    mkdirSync(dirname(path), { recursive: true });
-  }
-  const db = openDatabase(path);
+  const db = createPoolDatabase(databaseUrl);
   if (shouldMigrate) {
-    migrate(db);
+    try {
+      await migrate(db);
+    } catch (error) {
+      await db.close();
+      throw error;
+    }
   }
   return db;
 }

@@ -15,7 +15,7 @@ function delay(ms: number): Promise<void> {
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  const db = createDatabase(config.SQLITE_PATH);
+  const db = await createDatabase(config.DATABASE_URL);
   const provider = createSmsProvider(config);
   const paymentProvider = createPaymentProvider(config);
   const secretBox = config.ENCRYPTION_KEY ? new SecretBox(config.ENCRYPTION_KEY) : null;
@@ -62,7 +62,7 @@ async function main(): Promise<void> {
   const shutdown = async (): Promise<void> => {
     running = false;
     await app.close();
-    db.close();
+    await db.close();
     process.exit(0);
   };
   process.on("SIGINT", shutdown);

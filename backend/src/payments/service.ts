@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Amount, PaymentState } from "../domain";
 import type { Db } from "../db";
-import { isUniqueViolation } from "../db/sqlite-errors";
+import { isUniqueViolation } from "../db/errors";
 import { AppError } from "../errors";
 import { isPast, nowIso } from "../util/time";
 import { compareAmounts, sameAsset } from "./amount";
@@ -98,13 +98,13 @@ interface PaymentRow {
 
 // --- Lectura -----------------------------------------------------------------
 
-export function getPayment(db: Db, id: string): PaymentSnapshot | null {
-  const row = db.prepare(`SELECT * FROM payments WHERE id = ?`).get(id) as PaymentRow | undefined;
+export async function getPayment(db: Db, id: string): Promise<PaymentSnapshot | null> {
+  const row = await db.get<PaymentRow>(`SELECT * FROM payments WHERE id = ?`, [id]);
   return row ? toSnapshot(row) : null;
 }
 
-export function findPaymentByIdempotencyKey(db: Db, key: string): PaymentSnapshot | null {
-  const row = db.prepare(`SELECT * FROM payments WHERE idempotency_key = ?`).get(key) as PaymentRow | undefined;
+export async function findPaymentByIdempotencyKey(db: Db, key: string): Promise<PaymentSnapshot | null> {
+  const row = await db.get<PaymentRow>(`SELECT * FROM payments WHERE idempotency_key = ?`, [key]);
   return row ? toSnapshot(row) : null;
 }
 
@@ -122,7 +122,7 @@ export async function preparePayment(
   const { db, provider } = deps;
 
   if (input.idempotencyKey) {
-    const existing = findPaymentByIdempotencyKey(db, input.idempotencyKey);
+    const existing = await findPaymentByIdempotencyKey(db, input.idempotencyKey);
     if (existing) {
       return existing;
     }
@@ -149,37 +149,38 @@ export async function preparePayment(
   const reference = input.reference ?? `ref-${randomUUID()}`;
   const now = nowIso();
   try {
-    db.prepare(
+    await db.run(
       `INSERT INTO payments (
          id, reference, sender_user_id, sender_wallet_id, recipient_id, recipient_wallet_address,
          state, debit_value, debit_currency, debit_scale,
          receive_value, receive_currency, receive_scale,
          quote_id, quote_expires_at, incoming_payment_id, idempotency_key, created_at, updated_at
        ) VALUES (?, ?, ?, ?, ?, ?, 'AWAITING_CONFIRMATION', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      id,
-      reference,
-      input.senderUserId,
-      input.senderWalletId,
-      input.recipientId ?? null,
-      input.recipientWalletAddress,
-      quote.debitAmount.value,
-      quote.debitAmount.currency,
-      quote.debitAmount.assetScale,
-      quote.receiveAmount.value,
-      quote.receiveAmount.currency,
-      quote.receiveAmount.assetScale,
-      quote.id,
-      quote.expiresAt,
-      incoming.id,
-      input.idempotencyKey ?? null,
-      now,
-      now,
+      [
+        id,
+        reference,
+        input.senderUserId,
+        input.senderWalletId,
+        input.recipientId ?? null,
+        input.recipientWalletAddress,
+        quote.debitAmount.value,
+        quote.debitAmount.currency,
+        quote.debitAmount.assetScale,
+        quote.receiveAmount.value,
+        quote.receiveAmount.currency,
+        quote.receiveAmount.assetScale,
+        quote.id,
+        quote.expiresAt,
+        incoming.id,
+        input.idempotencyKey ?? null,
+        now,
+        now,
+      ],
     );
   } catch (error) {
-    // Carrera de idempotencia: otro hilo insertó el mismo trabajo antes.
+    // Idempotency race: another thread inserted the same work first.
     if (isUniqueViolation(error) && input.idempotencyKey) {
-      const existing = findPaymentByIdempotencyKey(db, input.idempotencyKey);
+      const existing = await findPaymentByIdempotencyKey(db, input.idempotencyKey);
       if (existing) {
         return existing;
       }
@@ -187,7 +188,7 @@ export async function preparePayment(
     throw error;
   }
 
-  return getPayment(db, id) as PaymentSnapshot;
+  return (await getPayment(db, id)) as PaymentSnapshot;
 }
 
 // --- Grants (spec §9, §13) ---------------------------------------------------
@@ -225,7 +226,7 @@ export async function executePayment(
 ): Promise<PaymentSnapshot> {
   const { db, provider } = deps;
 
-  let payment = getPayment(db, input.paymentId);
+  let payment = await getPayment(db, input.paymentId);
   if (!payment) {
     throw new AppError("NOT_FOUND", `Pago no encontrado: ${input.paymentId}`);
   }
@@ -248,9 +249,9 @@ export async function executePayment(
     });
   }
 
-  const claimed = claimForExecution(db, payment.id);
+  const claimed = await claimForExecution(db, payment.id);
   if (!claimed) {
-    payment = getPayment(db, input.paymentId) as PaymentSnapshot;
+    payment = (await getPayment(db, input.paymentId)) as PaymentSnapshot;
     if (payment.state === "PROCESSING") {
       return payment;
     }
@@ -258,12 +259,13 @@ export async function executePayment(
   }
   payment = claimed;
 
-  const walletRow = db
-    .prepare(`SELECT wallet_address FROM wallets WHERE id = ?`)
-    .get(payment.senderWalletId) as { wallet_address: string } | undefined;
+  const walletRow = await db.get<{ wallet_address: string }>(
+    `SELECT wallet_address FROM wallets WHERE id = ?`,
+    [payment.senderWalletId],
+  );
   if (!walletRow) {
     const error = new AppError("NOT_FOUND", "No se encontró la wallet emisora del pago.");
-    markFailed(db, payment.id, error);
+    await markFailed(db, payment.id, error);
     throw error;
   }
   const senderWallet = await provider.getWalletMetadata(walletRow.wallet_address);
@@ -284,7 +286,7 @@ export async function executePayment(
         requested: payment.debitAmount.value,
         remaining: usage.remaining.value,
       });
-      markFailed(db, payment.id, error);
+      await markFailed(db, payment.id, error);
       throw error;
     }
   }
@@ -299,38 +301,39 @@ export async function executePayment(
     });
   } catch (error) {
     if (error instanceof AppError && (error.code === "INSUFFICIENT_GRANT_BUDGET" || error.code === "INSUFFICIENT_FUNDS")) {
-      markFailed(db, payment.id, error);
+      await markFailed(db, payment.id, error);
       throw error;
     }
-    // Resultado incierto: el recurso pudo crearse. No se reintenta a ciegas.
-    markNeedsReview(db, payment.id, error);
-    return getPayment(db, payment.id) as PaymentSnapshot;
+    // Uncertain outcome: the resource may have been created. Do not retry blindly.
+    await markNeedsReview(db, payment.id, error);
+    return (await getPayment(db, payment.id)) as PaymentSnapshot;
   }
 
-  // Se persiste el id del recurso y el débito confirmado por el recurso (si lo trae).
-  db.prepare(
+  // Persist the resource id and the debit confirmed by the resource (if any).
+  await db.run(
     `UPDATE payments SET outgoing_payment_id = ?, debit_value = ?, debit_currency = ?, debit_scale = ?,
         updated_at = ?
       WHERE id = ?`,
-  ).run(
-    outgoing.id,
-    outgoing.debitAmount?.value ?? payment.debitAmount?.value ?? null,
-    outgoing.debitAmount?.currency ?? payment.debitAmount?.currency ?? null,
-    outgoing.debitAmount?.assetScale ?? payment.debitAmount?.assetScale ?? null,
-    nowIso(),
-    payment.id,
+    [
+      outgoing.id,
+      outgoing.debitAmount?.value ?? payment.debitAmount?.value ?? null,
+      outgoing.debitAmount?.currency ?? payment.debitAmount?.currency ?? null,
+      outgoing.debitAmount?.assetScale ?? payment.debitAmount?.assetScale ?? null,
+      nowIso(),
+      payment.id,
+    ],
   );
 
-  // Se confirma consultando el recurso: crear el outgoing-payment NO es prueba
-  // de que se haya completado.
+  // Confirmation comes from querying the resource: creating the outgoing-payment
+  // is NOT proof that it completed.
   try {
     return await refreshPaymentStatus(
       { db, provider },
       { paymentId: payment.id, accessToken: input.accessToken },
     );
   } catch (error) {
-    markNeedsReview(db, payment.id, error);
-    return getPayment(db, payment.id) as PaymentSnapshot;
+    await markNeedsReview(db, payment.id, error);
+    return (await getPayment(db, payment.id)) as PaymentSnapshot;
   }
 }
 
@@ -343,7 +346,7 @@ export async function refreshPaymentStatus(
   deps: PaymentServiceDeps,
   input: { paymentId: string; accessToken: string },
 ): Promise<PaymentSnapshot> {
-  const payment = getPayment(deps.db, input.paymentId);
+  const payment = await getPayment(deps.db, input.paymentId);
   if (!payment) {
     throw new AppError("NOT_FOUND", `Pago no encontrado: ${input.paymentId}`);
   }
@@ -354,46 +357,48 @@ export async function refreshPaymentStatus(
     url: payment.outgoingPaymentId,
     accessToken: input.accessToken,
   });
-  applyProviderStatus(deps.db, payment.id, outgoing);
-  return getPayment(deps.db, payment.id) as PaymentSnapshot;
+  await applyProviderStatus(deps.db, payment.id, outgoing);
+  return (await getPayment(deps.db, payment.id)) as PaymentSnapshot;
 }
 
 // --- Persistencia interna ----------------------------------------------------
 
-function claimForExecution(db: Db, id: string): PaymentSnapshot | null {
-  const row = db
-    .prepare(
-      `UPDATE payments SET state = 'PROCESSING', updated_at = ?
-        WHERE id = ? AND state = 'AWAITING_CONFIRMATION'
-        RETURNING *`,
-    )
-    .get(nowIso(), id) as PaymentRow | undefined;
+async function claimForExecution(db: Db, id: string): Promise<PaymentSnapshot | null> {
+  const row = await db.get<PaymentRow>(
+    `UPDATE payments SET state = 'PROCESSING', updated_at = ?
+      WHERE id = ? AND state = 'AWAITING_CONFIRMATION'
+      RETURNING *`,
+    [nowIso(), id],
+  );
   return row ? toSnapshot(row) : null;
 }
 
-/** Traduce el estado del recurso a una transición persistida. */
-function applyProviderStatus(db: Db, paymentId: string, outgoing: OutgoingPayment): void {
+/** Translates the resource status into a persisted transition. */
+async function applyProviderStatus(db: Db, paymentId: string, outgoing: OutgoingPayment): Promise<void> {
   const state: PaymentState = outgoing.status === "COMPLETED" ? "COMPLETED" : outgoing.status === "FAILED" ? "FAILED" : "PROCESSING";
-  db.prepare(
-    `UPDATE payments SET state = ?, last_error = ?, updated_at = ? WHERE id = ?`,
-  ).run(state, outgoing.status === "COMPLETED" ? null : outgoing.error ?? null, nowIso(), paymentId);
+  await db.run(`UPDATE payments SET state = ?, last_error = ?, updated_at = ? WHERE id = ?`, [
+    state,
+    outgoing.status === "COMPLETED" ? null : outgoing.error ?? null,
+    nowIso(),
+    paymentId,
+  ]);
 }
 
-function markFailed(db: Db, paymentId: string, error: AppError): void {
-  db.prepare(`UPDATE payments SET state = 'FAILED', last_error = ?, updated_at = ? WHERE id = ?`).run(
+async function markFailed(db: Db, paymentId: string, error: AppError): Promise<void> {
+  await db.run(`UPDATE payments SET state = 'FAILED', last_error = ?, updated_at = ? WHERE id = ?`, [
     `${error.code}: ${error.message}`,
     nowIso(),
     paymentId,
-  );
+  ]);
 }
 
-function markNeedsReview(db: Db, paymentId: string, error: unknown): void {
+async function markNeedsReview(db: Db, paymentId: string, error: unknown): Promise<void> {
   const message = error instanceof Error ? error.message : String(error);
-  db.prepare(`UPDATE payments SET state = 'NEEDS_REVIEW', last_error = ?, updated_at = ? WHERE id = ?`).run(
+  await db.run(`UPDATE payments SET state = 'NEEDS_REVIEW', last_error = ?, updated_at = ? WHERE id = ?`, [
     message,
     nowIso(),
     paymentId,
-  );
+  ]);
 }
 
 // --- Mapeo de filas ----------------------------------------------------------

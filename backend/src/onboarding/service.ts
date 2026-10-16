@@ -1,7 +1,7 @@
 import { randomBytes, randomInt, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import type { AppConfig } from "../config";
 import type { Db } from "../db";
-import { isUniqueViolation } from "../db/sqlite-errors";
+import { isUniqueViolation } from "../db/errors";
 import type { Amount, UserStatus } from "../domain";
 import { AppError } from "../errors";
 import type { PaymentProvider, WalletMetadata } from "../payments/types";
@@ -63,16 +63,16 @@ export interface GrantRow {
   updated_at: string;
 }
 
-export function getUserRow(db: Db, id: string): UserRow | undefined {
-  return db.prepare("SELECT * FROM users WHERE id = ?").get(id) as UserRow | undefined;
+export async function getUserRow(db: Db, id: string): Promise<UserRow | undefined> {
+  return db.get<UserRow>("SELECT * FROM users WHERE id = ?", [id]);
 }
 
-export function getWalletRow(db: Db, id: string): WalletRow | undefined {
-  return db.prepare("SELECT * FROM wallets WHERE id = ?").get(id) as WalletRow | undefined;
+export async function getWalletRow(db: Db, id: string): Promise<WalletRow | undefined> {
+  return db.get<WalletRow>("SELECT * FROM wallets WHERE id = ?", [id]);
 }
 
-export function getGrantRow(db: Db, id: string): GrantRow | undefined {
-  return db.prepare("SELECT * FROM grants WHERE id = ?").get(id) as GrantRow | undefined;
+export async function getGrantRow(db: Db, id: string): Promise<GrantRow | undefined> {
+  return db.get<GrantRow>("SELECT * FROM grants WHERE id = ?", [id]);
 }
 
 export function rowToWalletMetadata(row: WalletRow): WalletMetadata {
@@ -86,16 +86,17 @@ export function rowToWalletMetadata(row: WalletRow): WalletMetadata {
 }
 
 /** Records a state transition for audit purposes. Never store secrets here (spec §11). */
-export function recordAudit(
+export async function recordAudit(
   db: Db,
   type: string,
   subjectType: string,
   subjectId: string,
   data: Record<string, unknown> = {},
-): void {
-  db.prepare(
+): Promise<void> {
+  await db.run(
     `INSERT INTO audit_events (id, type, subject_type, subject_id, data) VALUES (?, ?, ?, ?, ?)`,
-  ).run(randomUUID(), type, subjectType, subjectId, JSON.stringify(data));
+    [randomUUID(), type, subjectType, subjectId, JSON.stringify(data)],
+  );
 }
 
 // --- Phone normalization ----------------------------------------------------
@@ -154,25 +155,24 @@ interface PhoneVerificationRow {
 
 // --- User registration ------------------------------------------------------
 
-export function createUser(deps: OnboardingDeps, input: { phone: string }): UserRow {
+export async function createUser(deps: OnboardingDeps, input: { phone: string }): Promise<UserRow> {
   const phone = normalizePhone(input.phone);
   const id = randomUUID();
   const now = nowIso();
   try {
-    deps.db
-      .prepare(
-        `INSERT INTO users (id, phone, status, created_at, updated_at)
-         VALUES (?, ?, 'pending', ?, ?)`,
-      )
-      .run(id, phone, now, now);
+    await deps.db.run(
+      `INSERT INTO users (id, phone, status, created_at, updated_at)
+       VALUES (?, ?, 'pending', ?, ?)`,
+      [id, phone, now, now],
+    );
   } catch (error) {
     if (isUniqueViolation(error)) {
       throw new AppError("CONFLICT", "El teléfono ya está registrado.", { phone });
     }
     throw error;
   }
-  recordAudit(deps.db, "user.created", "user", id, { phone });
-  return getUserRow(deps.db, id) as UserRow;
+  await recordAudit(deps.db, "user.created", "user", id, { phone });
+  return (await getUserRow(deps.db, id)) as UserRow;
 }
 
 // --- Phone possession verification -----------------------------------------
@@ -181,46 +181,43 @@ export function createUser(deps: OnboardingDeps, input: { phone: string }): User
  * Generates a one-time code, stores only its hash and returns the plaintext so
  * the caller can deliver it out of band (SMS/dev peek). The code is never logged.
  */
-export function requestPhoneVerification(
+export async function requestPhoneVerification(
   deps: OnboardingDeps,
   userId: string,
-): { expiresAt: string; code: string } {
-  const user = getUserRow(deps.db, userId);
+): Promise<{ expiresAt: string; code: string }> {
+  const user = await getUserRow(deps.db, userId);
   if (!user) {
     throw new AppError("NOT_FOUND", "Usuario no encontrado.");
   }
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   const now = nowIso();
   const expiresAt = isoPlusSeconds(PHONE_CODE_TTL_SECONDS);
-  deps.db
-    .prepare(
-      `UPDATE phone_verifications SET consumed_at = ?
-        WHERE user_id = ? AND consumed_at IS NULL`,
-    )
-    .run(now, userId);
-  deps.db
-    .prepare(
-      `INSERT INTO phone_verifications
-         (id, user_id, phone, code_hash, attempts, max_attempts, expires_at, created_at)
-       VALUES (?, ?, ?, ?, 0, ?, ?, ?)`,
-    )
-    .run(randomUUID(), userId, user.phone, hashCode(code), PHONE_CODE_MAX_ATTEMPTS, expiresAt, now);
+  await deps.db.run(
+    `UPDATE phone_verifications SET consumed_at = ?
+      WHERE user_id = ? AND consumed_at IS NULL`,
+    [now, userId],
+  );
+  await deps.db.run(
+    `INSERT INTO phone_verifications
+       (id, user_id, phone, code_hash, attempts, max_attempts, expires_at, created_at)
+     VALUES (?, ?, ?, ?, 0, ?, ?, ?)`,
+    [randomUUID(), userId, user.phone, hashCode(code), PHONE_CODE_MAX_ATTEMPTS, expiresAt, now],
+  );
   return { expiresAt, code };
 }
 
 /** Verifies the latest code and activates the user on success. */
-export function verifyPhone(deps: OnboardingDeps, userId: string, code: string): UserRow {
-  const user = getUserRow(deps.db, userId);
+export async function verifyPhone(deps: OnboardingDeps, userId: string, code: string): Promise<UserRow> {
+  const user = await getUserRow(deps.db, userId);
   if (!user) {
     throw new AppError("NOT_FOUND", "Usuario no encontrado.");
   }
-  const row = deps.db
-    .prepare(
-      `SELECT * FROM phone_verifications
-        WHERE user_id = ? AND consumed_at IS NULL
-        ORDER BY created_at DESC, rowid DESC LIMIT 1`,
-    )
-    .get(userId) as PhoneVerificationRow | undefined;
+  const row = await deps.db.get<PhoneVerificationRow>(
+    `SELECT * FROM phone_verifications
+      WHERE user_id = ? AND consumed_at IS NULL
+      ORDER BY created_at DESC, seq DESC LIMIT 1`,
+    [userId],
+  );
   if (!row) {
     throw new AppError("VALIDATION_FAILED", "No hay una verificación pendiente.");
   }
@@ -231,20 +228,17 @@ export function verifyPhone(deps: OnboardingDeps, userId: string, code: string):
     throw new AppError("FORBIDDEN", "Demasiados intentos. Solicita un código nuevo.");
   }
   if (!verifyCodeHash(code, row.code_hash)) {
-    deps.db
-      .prepare(`UPDATE phone_verifications SET attempts = attempts + 1 WHERE id = ?`)
-      .run(row.id);
+    await deps.db.run(`UPDATE phone_verifications SET attempts = attempts + 1 WHERE id = ?`, [row.id]);
     throw new AppError("VALIDATION_FAILED", "Código incorrecto.");
   }
   const now = nowIso();
-  deps.db.prepare(`UPDATE phone_verifications SET consumed_at = ? WHERE id = ?`).run(now, row.id);
-  deps.db
-    .prepare(
-      `UPDATE users SET phone_verified_at = ?, status = 'active', updated_at = ? WHERE id = ?`,
-    )
-    .run(now, now, userId);
-  recordAudit(deps.db, "user.phone_verified", "user", userId, {});
-  return getUserRow(deps.db, userId) as UserRow;
+  await deps.db.run(`UPDATE phone_verifications SET consumed_at = ? WHERE id = ?`, [now, row.id]);
+  await deps.db.run(
+    `UPDATE users SET phone_verified_at = ?, status = 'active', updated_at = ? WHERE id = ?`,
+    [now, now, userId],
+  );
+  await recordAudit(deps.db, "user.phone_verified", "user", userId, {});
+  return (await getUserRow(deps.db, userId)) as UserRow;
 }
 
 // --- Wallet connection and interactive grant --------------------------------
@@ -270,7 +264,7 @@ export async function connectWallet(
   userId: string,
   input: { walletAddress: string; limit?: Amount },
 ): Promise<WalletLinkResult> {
-  const user = getUserRow(deps.db, userId);
+  const user = await getUserRow(deps.db, userId);
   if (!user) {
     throw new AppError("NOT_FOUND", "Usuario no encontrado.");
   }
@@ -280,9 +274,9 @@ export async function connectWallet(
   const metadata = await deps.provider.getWalletMetadata(input.walletAddress);
   const secretBox = requireSecretBox(deps);
 
-  const existing = deps.db
-    .prepare("SELECT * FROM wallets WHERE wallet_address = ?")
-    .get(metadata.walletAddress) as WalletRow | undefined;
+  const existing = await deps.db.get<WalletRow>("SELECT * FROM wallets WHERE wallet_address = ?", [
+    metadata.walletAddress,
+  ]);
   if (existing && existing.user_id !== userId) {
     throw new AppError("CONFLICT", "La wallet ya está vinculada a otro usuario.");
   }
@@ -290,20 +284,17 @@ export async function connectWallet(
   const now = nowIso();
   const walletId = existing?.id ?? randomUUID();
   if (existing) {
-    deps.db
-      .prepare(
-        `UPDATE wallets SET currency = ?, asset_scale = ?, auth_server = ?, resource_server = ?, updated_at = ?
-          WHERE id = ?`,
-      )
-      .run(metadata.currency, metadata.assetScale, metadata.authServer, metadata.resourceServer, now, walletId);
+    await deps.db.run(
+      `UPDATE wallets SET currency = ?, asset_scale = ?, auth_server = ?, resource_server = ?, updated_at = ?
+        WHERE id = ?`,
+      [metadata.currency, metadata.assetScale, metadata.authServer, metadata.resourceServer, now, walletId],
+    );
   } else {
-    deps.db
-      .prepare(
-        `INSERT INTO wallets
-           (id, user_id, wallet_address, currency, asset_scale, auth_server, resource_server, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
+    await deps.db.run(
+      `INSERT INTO wallets
+         (id, user_id, wallet_address, currency, asset_scale, auth_server, resource_server, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
         walletId,
         userId,
         metadata.walletAddress,
@@ -313,7 +304,8 @@ export async function connectWallet(
         metadata.resourceServer,
         now,
         now,
-      );
+      ],
+    );
   }
 
   const limit: Amount = input.limit ?? {
@@ -332,14 +324,12 @@ export async function connectWallet(
   });
 
   if (pending.kind === "pending") {
-    deps.db
-      .prepare(
-        `INSERT INTO grants
-           (id, wallet_id, status, scopes, limit_value, limit_currency, limit_scale,
-            continue_uri, continue_token_enc, interact_url, created_at, updated_at)
-         VALUES (?, ?, 'PENDING_INTERACTION', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
+    await deps.db.run(
+      `INSERT INTO grants
+         (id, wallet_id, status, scopes, limit_value, limit_currency, limit_scale,
+          continue_uri, continue_token_enc, interact_url, created_at, updated_at)
+       VALUES (?, ?, 'PENDING_INTERACTION', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
         grantId,
         walletId,
         JSON.stringify(["outgoing-payment"]),
@@ -351,8 +341,9 @@ export async function connectWallet(
         pending.interactUrl,
         now,
         now,
-      );
-    recordAudit(deps.db, "grant.requested", "grant", grantId, { walletId });
+      ],
+    );
+    await recordAudit(deps.db, "grant.requested", "grant", grantId, { walletId });
     return {
       wallet: {
         id: walletId,
@@ -364,14 +355,12 @@ export async function connectWallet(
     };
   }
 
-  deps.db
-    .prepare(
-      `INSERT INTO grants
-         (id, wallet_id, status, scopes, limit_value, limit_currency, limit_scale,
-          access_token_enc, expires_at, created_at, updated_at)
-       VALUES (?, ?, 'GRANTED', ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
+  await deps.db.run(
+    `INSERT INTO grants
+       (id, wallet_id, status, scopes, limit_value, limit_currency, limit_scale,
+        access_token_enc, expires_at, created_at, updated_at)
+     VALUES (?, ?, 'GRANTED', ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
       grantId,
       walletId,
       JSON.stringify(["outgoing-payment"]),
@@ -382,8 +371,9 @@ export async function connectWallet(
       pending.expiresAt,
       now,
       now,
-    );
-  recordAudit(deps.db, "grant.granted", "grant", grantId, { walletId });
+    ],
+  );
+  await recordAudit(deps.db, "grant.granted", "grant", grantId, { walletId });
   return {
     wallet: {
       id: walletId,
@@ -405,7 +395,7 @@ export async function completeGrantCallback(
   input: { grantId: string; interactRef: string },
 ): Promise<{ id: string; status: GrantRow["status"] }> {
   const secretBox = requireSecretBox(deps);
-  const grant = getGrantRow(deps.db, input.grantId);
+  const grant = await getGrantRow(deps.db, input.grantId);
   if (!grant) {
     throw new AppError("NOT_FOUND", "Interacción de grant no encontrada.");
   }
@@ -415,7 +405,7 @@ export async function completeGrantCallback(
   if (!grant.continue_uri || !grant.continue_token_enc) {
     throw new AppError("INTERNAL", "El grant no tiene datos de continuación almacenados.");
   }
-  const walletRow = getWalletRow(deps.db, grant.wallet_id);
+  const walletRow = await getWalletRow(deps.db, grant.wallet_id);
   if (!walletRow) {
     throw new AppError("INTERNAL", "La wallet del grant no existe.");
   }
@@ -430,13 +420,12 @@ export async function completeGrantCallback(
     throw new AppError("VALIDATION_FAILED", "La interacción del grant es inválida o fue rechazada.");
   }
   const now = nowIso();
-  deps.db
-    .prepare(
-      `UPDATE grants
-          SET status = 'GRANTED', access_token_enc = ?, continue_token_enc = NULL, expires_at = ?, updated_at = ?
-        WHERE id = ?`,
-    )
-    .run(secretBox.encrypt(granted.accessToken), granted.expiresAt, now, grant.id);
-  recordAudit(deps.db, "grant.granted", "grant", grant.id, { via: "callback" });
+  await deps.db.run(
+    `UPDATE grants
+        SET status = 'GRANTED', access_token_enc = ?, continue_token_enc = NULL, expires_at = ?, updated_at = ?
+      WHERE id = ?`,
+    [secretBox.encrypt(granted.accessToken), granted.expiresAt, now, grant.id],
+  );
+  await recordAudit(deps.db, "grant.granted", "grant", grant.id, { via: "callback" });
   return { id: grant.id, status: "GRANTED" };
 }

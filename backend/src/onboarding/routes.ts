@@ -48,13 +48,13 @@ export function registerOnboardingRoutes(app: FastifyInstance, deps: OnboardingR
 
   app.post("/admin/users", { preHandler: admin }, async (request, reply) => {
     const body = createUserSchema.parse(request.body);
-    const user = createUser(deps, body);
+    const user = await createUser(deps, body);
     return reply.code(201).send({ user });
   });
 
   app.post("/admin/users/:id/phone/request-code", { preHandler: admin }, async (request, reply) => {
     const params = userIdParams.parse(request.params);
-    const result = requestPhoneVerification(deps, params.id);
+    const result = await requestPhoneVerification(deps, params.id);
     // The code is never logged. Outside production it is returned as a dev/test peek.
     if (deps.config.NODE_ENV === "production") {
       return reply.send({ ok: true, expiresAt: result.expiresAt });
@@ -65,7 +65,7 @@ export function registerOnboardingRoutes(app: FastifyInstance, deps: OnboardingR
   app.post("/admin/users/:id/phone/verify", { preHandler: admin }, async (request, reply) => {
     const params = userIdParams.parse(request.params);
     const body = verifyPhoneSchema.parse(request.body);
-    const user = verifyPhone(deps, params.id, body.code);
+    const user = await verifyPhone(deps, params.id, body.code);
     return reply.send({ ok: true, status: user.status });
   });
 

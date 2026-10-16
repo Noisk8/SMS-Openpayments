@@ -1,9 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "../src/config";
+import { testDatabaseUrl } from "./helpers";
+
+const base = (overrides: Partial<NodeJS.ProcessEnv> = {}): NodeJS.ProcessEnv =>
+  ({
+    NODE_ENV: "test",
+    DATABASE_URL: testDatabaseUrl(),
+    ...overrides,
+  }) as NodeJS.ProcessEnv;
 
 describe("config", () => {
   it("aplica valores por defecto válidos", () => {
-    const config = loadConfig({ NODE_ENV: "test" } as NodeJS.ProcessEnv);
+    const config = loadConfig(base());
     expect(config.PORT).toBe(3000);
     expect(config.PAYMENT_PROVIDER).toBe("fake");
     expect(config.PAYMENT_CURRENCY).toBe("COP");
@@ -12,14 +20,10 @@ describe("config", () => {
   });
 
   it("rechaza una moneda que no es ISO 4217", () => {
-    expect(() =>
-      loadConfig({ NODE_ENV: "test", PAYMENT_CURRENCY: "pesos" } as NodeJS.ProcessEnv),
-    ).toThrow();
+    expect(() => loadConfig(base({ PAYMENT_CURRENCY: "pesos" }))).toThrow();
   });
 
   it("valida el rango de asset scale", () => {
-    expect(() =>
-      loadConfig({ NODE_ENV: "test", PAYMENT_ASSET_SCALE: "99" } as NodeJS.ProcessEnv),
-    ).toThrow();
+    expect(() => loadConfig(base({ PAYMENT_ASSET_SCALE: "99" }))).toThrow();
   });
 });

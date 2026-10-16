@@ -25,8 +25,8 @@ export function registerSmsRoutes(app: FastifyInstance, deps: SmsRouteDeps): voi
   app.post("/webhooks/sms", async (request, reply) => {
     const webhookRequest: WebhookRequest = { headers: request.headers, body: request.body };
     try {
-      const result = receiveInbound(deps.db, deps.provider, webhookRequest);
-      // Un duplicado se reconoce sin repetir efectos de negocio (spec §5).
+      await receiveInbound(deps.db, deps.provider, webhookRequest);
+      // A duplicate is acknowledged without repeating business effects (spec §5).
       return reply.code(200).send(deps.provider.acknowledge());
     } catch (error) {
       if (isAppError(error) && error.code === "UNAUTHORIZED") {
@@ -58,12 +58,12 @@ export function registerSmsRoutes(app: FastifyInstance, deps: SmsRouteDeps): voi
         receivedAt: nowIso(),
       },
     };
-    const received = receiveInbound(deps.db, deps.provider, webhookRequest);
+    const received = await receiveInbound(deps.db, deps.provider, webhookRequest);
     if (received.duplicate) {
       return reply.send({ ok: true, duplicate: true });
     }
 
-    const inbound = getInboundSms(deps.db, received.messageRowId);
+    const inbound = await getInboundSms(deps.db, received.messageRowId);
     let reply_text: string | undefined;
     if (inbound) {
       const outcome = handleInboundCommand({ db: deps.db, config: deps.config, provider: deps.provider }, inbound);
@@ -83,12 +83,10 @@ export function registerSmsRoutes(app: FastifyInstance, deps: SmsRouteDeps): voi
   });
 
   app.get("/dev/sms/messages", async (_request, reply) => {
-    const messages = deps.db
-      .prepare(
-        `SELECT id, provider, direction, from_phone AS "from", to_phone AS "to", text, status, created_at
-           FROM sms_messages ORDER BY created_at DESC, rowid DESC LIMIT 50`,
-      )
-      .all();
+    const messages = await deps.db.all(
+      `SELECT id, provider, direction, from_phone AS "from", to_phone AS "to", text, status, created_at
+         FROM sms_messages ORDER BY created_at DESC, seq DESC LIMIT 50`,
+    );
     return reply.send({ messages });
   });
 }

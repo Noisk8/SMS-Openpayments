@@ -5,7 +5,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3000),
   PUBLIC_BASE_URL: z.string().default("http://localhost:3000"),
-  SQLITE_PATH: z.string().min(1).default("./data/sms-openpayments.sqlite"),
+  DATABASE_URL: z.string().min(1, "DATABASE_URL es obligatoria"),
 
   ADMIN_API_TOKEN: z.string().min(1).default("dev-admin-token"),
   ENCRYPTION_KEY: z.string().default(""),

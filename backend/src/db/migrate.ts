@@ -5,23 +5,25 @@ import type { Db } from "./connection";
 
 const DEFAULT_DIR = join(dirname(fileURLToPath(import.meta.url)), "migrations");
 
+/** ISO-8601 UTC text default, matching `new Date().toISOString()` in JS. */
+const ISO_NOW = `to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
+
 /**
- * Aplica las migraciones .sql pendientes en orden y las registra en schema_migrations.
- * Cada migración corre en su propia transacción. Devuelve los ficheros aplicados.
+ * Applies the pending `.sql` migrations in order and records them in
+ * `schema_migrations`. Each migration runs in its own transaction. Returns the
+ * files that were applied.
  */
-export function migrate(db: Db, dir: string = DEFAULT_DIR): string[] {
-  db.exec(
+export async function migrate(db: Db, dir: string = DEFAULT_DIR): Promise<string[]> {
+  await db.run(
     `CREATE TABLE IF NOT EXISTS schema_migrations (
        version    TEXT PRIMARY KEY,
-       applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+       applied_at TEXT NOT NULL DEFAULT (${ISO_NOW})
      )`,
   );
-  const appliedRows = db.prepare("SELECT version FROM schema_migrations").all() as Array<{
-    version: string;
-  }>;
-  const applied = new Set(appliedRows.map((r) => r.version));
+  const appliedRows = await db.all<{ version: string }>("SELECT version FROM schema_migrations");
+  const applied = new Set(appliedRows.map((row) => row.version));
   const files = readdirSync(dir)
-    .filter((f) => f.endsWith(".sql"))
+    .filter((file) => file.endsWith(".sql"))
     .sort();
 
   const ran: string[] = [];
@@ -30,25 +32,29 @@ export function migrate(db: Db, dir: string = DEFAULT_DIR): string[] {
       continue;
     }
     const sql = readFileSync(join(dir, file), "utf8");
-    const run = db.transaction(() => {
-      db.exec(sql);
-      db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(file);
+    await db.transaction(async (tx) => {
+      await tx.query(sql);
+      await tx.run("INSERT INTO schema_migrations (version) VALUES (?)", [file]);
     });
-    run();
     ran.push(file);
   }
   return ran;
 }
 
-/** Ejecuta las migraciones desde la CLI: `npm run db:migrate`. */
+/** Runs the migrations from the CLI: `npm run db:migrate`. */
 async function main(): Promise<void> {
   const { loadConfig } = await import("../config");
   const { createDatabase } = await import("./index");
   const config = loadConfig();
-  const db = createDatabase(config.SQLITE_PATH, { migrate: false });
-  const ran = migrate(db);
-  console.log(ran.length > 0 ? `Migraciones aplicadas: ${ran.join(", ")}` : "Sin migraciones pendientes.");
-  db.close();
+  const db = await createDatabase(config.DATABASE_URL, { migrate: false });
+  try {
+    const ran = await migrate(db);
+    console.log(
+      ran.length > 0 ? `Applied migrations: ${ran.join(", ")}` : "No pending migrations.",
+    );
+  } finally {
+    await db.close();
+  }
 }
 
 const invokedDirectly =

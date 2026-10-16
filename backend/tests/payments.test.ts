@@ -34,12 +34,13 @@ const recipientWallet: WalletMetadata = {
 
 const cop = (value: string): Amount => ({ value, currency: "COP", assetScale: 0 });
 
-function seed(db: Db): void {
-  db.prepare(`INSERT INTO users (id, phone, status) VALUES ('u1', '+573001112233', 'active')`).run();
-  db.prepare(
+async function seed(db: Db): Promise<void> {
+  await db.run(`INSERT INTO users (id, phone, status) VALUES ('u1', '+573001112233', 'active')`);
+  await db.run(
     `INSERT INTO wallets (id, user_id, wallet_address, currency, asset_scale, auth_server, resource_server)
      VALUES ('w1', 'u1', ?, 'COP', 0, ?, ?)`,
-  ).run(senderWallet.walletAddress, senderWallet.authServer, senderWallet.resourceServer);
+    [senderWallet.walletAddress, senderWallet.authServer, senderWallet.resourceServer],
+  );
 }
 
 describe("flujo de pagos (proveedor fake)", () => {
@@ -47,17 +48,17 @@ describe("flujo de pagos (proveedor fake)", () => {
   let provider: FakePaymentProvider;
   let deps: PaymentServiceDeps;
 
-  beforeEach(() => {
-    db = testDb();
-    seed(db);
+  beforeEach(async () => {
+    db = await testDb();
+    await seed(db);
     provider = new FakePaymentProvider();
     provider.registerWallet(senderWallet, { balance: cop("100000"), grantLimit: cop("100000") });
     provider.registerWallet(recipientWallet);
     deps = { db, provider };
   });
 
-  afterEach(() => {
-    db.close();
+  afterEach(async () => {
+    await db.close();
   });
 
   async function prepare(debit: Amount = cop("5000"), idempotencyKey?: string) {
@@ -105,17 +106,17 @@ describe("flujo de pagos (proveedor fake)", () => {
 
   it("un quote expirado exige reconfirmar y no ejecuta", async () => {
     const payment = await prepare();
-    // Simula el paso del tiempo: el quote persistido queda vencido.
-    db.prepare(`UPDATE payments SET quote_expires_at = ? WHERE id = ?`).run(
+    // Simulate elapsed time: the persisted quote becomes expired.
+    await db.run(`UPDATE payments SET quote_expires_at = ? WHERE id = ?`, [
       new Date(Date.now() - 1000).toISOString(),
       payment.id,
-    );
+    ]);
 
     await expect(executePayment(deps, { paymentId: payment.id, accessToken: "tok" })).rejects.toMatchObject({
       code: "QUOTE_EXPIRED",
     });
-    // Sigue pendiente de confirmación: no se ejecuta ni se descarta.
-    expect(getPayment(db, payment.id)?.state).toBe("AWAITING_CONFIRMATION");
+    // Still awaiting confirmation: it is neither executed nor discarded.
+    expect((await getPayment(db, payment.id))?.state).toBe("AWAITING_CONFIRMATION");
   });
 
   it("no marca COMPLETED hasta que el recurso lo confirma", async () => {
@@ -127,7 +128,7 @@ describe("flujo de pagos (proveedor fake)", () => {
     expect(afterCreate.outgoingPaymentId).toBeTruthy();
 
     // El recurso existe pero aún no confirma el envío.
-    expect(getPayment(db, payment.id)?.state).toBe("PROCESSING");
+    expect((await getPayment(db, payment.id))?.state).toBe("PROCESSING");
 
     provider.setOutgoingPaymentStatus(afterCreate.outgoingPaymentId as string, "COMPLETED");
     const confirmed = await refreshPaymentStatus(deps, {
@@ -150,7 +151,7 @@ describe("flujo de pagos (proveedor fake)", () => {
     );
     expect(budgetError).toBeInstanceOf(AppError);
     expect((budgetError as AppError).code).toBe("INSUFFICIENT_GRANT_BUDGET");
-    expect(getPayment(db, budgetPayment.id)?.state).toBe("FAILED");
+    expect((await getPayment(db, budgetPayment.id))?.state).toBe("FAILED");
 
     // Caso B: hay presupuesto suficiente pero la wallet no tiene fondos.
     provider.setWalletBalance(senderWallet.walletAddress, cop("100"));
@@ -165,7 +166,7 @@ describe("flujo de pagos (proveedor fake)", () => {
     );
     expect(fundsError).toBeInstanceOf(AppError);
     expect((fundsError as AppError).code).toBe("INSUFFICIENT_FUNDS");
-    expect(getPayment(db, fundsPayment.id)?.state).toBe("FAILED");
+    expect((await getPayment(db, fundsPayment.id))?.state).toBe("FAILED");
 
     // Los dos errores son códigos distintos y accionables de forma distinta.
     expect((budgetError as AppError).code).not.toBe((fundsError as AppError).code);
@@ -185,7 +186,7 @@ describe("flujo de pagos (proveedor fake)", () => {
     provider.setOutgoingPaymentStatus(uncertain.outgoingPaymentId as string, "COMPLETED");
     const result = await reconcilePendingPayments(deps, { accessToken: token.accessToken });
     expect(result.updated).toBe(1);
-    expect(getPayment(db, payment.id)?.state).toBe("COMPLETED");
+    expect((await getPayment(db, payment.id))?.state).toBe("COMPLETED");
   });
 
   it("no reintenta a ciegas un create incierto sin recurso conocido", async () => {
@@ -200,6 +201,6 @@ describe("flujo de pagos (proveedor fake)", () => {
     const result = await reconcilePendingPayments(deps, { accessToken: token.accessToken });
     expect(result.inspected).toBe(1);
     expect(result.unresolved).toBe(1);
-    expect(getPayment(db, payment.id)?.state).toBe("NEEDS_REVIEW");
+    expect((await getPayment(db, payment.id))?.state).toBe("NEEDS_REVIEW");
   });
 });

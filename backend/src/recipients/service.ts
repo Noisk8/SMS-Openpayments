@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { AppConfig } from "../config";
 import type { Db } from "../db";
-import { isUniqueViolation } from "../db/sqlite-errors";
+import { isUniqueViolation } from "../db/errors";
 import { AppError } from "../errors";
 import type { PaymentProvider } from "../payments/types";
 import type { SecretBox } from "../security/encryption";
@@ -59,14 +59,13 @@ export async function resolveRecipientWallet(
 
   if (input.phone) {
     const phone = normalizePhone(input.phone);
-    const row = deps.db
-      .prepare(
-        `SELECT w.wallet_address AS wallet_address, w.currency AS currency, w.asset_scale AS asset_scale
-           FROM users u JOIN wallets w ON w.user_id = u.id
-          WHERE u.phone = ?
-          ORDER BY w.created_at DESC, w.rowid DESC LIMIT 1`,
-      )
-      .get(phone) as WalletLookupRow | undefined;
+    const row = await deps.db.get<WalletLookupRow>(
+      `SELECT w.wallet_address AS wallet_address, w.currency AS currency, w.asset_scale AS asset_scale
+         FROM users u JOIN wallets w ON w.user_id = u.id
+        WHERE u.phone = ?
+        ORDER BY w.created_at DESC, w.seq DESC LIMIT 1`,
+      [phone],
+    );
     if (!row) {
       throw new AppError("NOT_FOUND", "El teléfono no está asociado a una wallet registrada.");
     }
@@ -74,7 +73,7 @@ export async function resolveRecipientWallet(
   }
 
   if (input.alias) {
-    const existing = getRecipientByAlias(deps.db, input.userId, input.alias);
+    const existing = await getRecipientByAlias(deps.db, input.userId, input.alias);
     if (!existing) {
       throw new AppError("NOT_FOUND", "No existe un destinatario con ese alias.");
     }
@@ -93,7 +92,7 @@ export async function createRecipient(
   deps: RecipientDeps,
   input: { userId: string; alias: string; walletAddress?: string; phone?: string },
 ): Promise<RecipientRow> {
-  const user = getUserRow(deps.db, input.userId);
+  const user = await getUserRow(deps.db, input.userId);
   if (!user) {
     throw new AppError("NOT_FOUND", "Usuario no encontrado.");
   }
@@ -110,37 +109,40 @@ export async function createRecipient(
   const id = randomUUID();
   const now = new Date().toISOString();
   try {
-    deps.db
-      .prepare(
-        `INSERT INTO recipients
-           (id, user_id, alias, phone, wallet_address, currency, asset_scale, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(id, input.userId, alias, phone, resolved.walletAddress, resolved.currency, resolved.assetScale, now, now);
+    await deps.db.run(
+      `INSERT INTO recipients
+         (id, user_id, alias, phone, wallet_address, currency, asset_scale, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [id, input.userId, alias, phone, resolved.walletAddress, resolved.currency, resolved.assetScale, now, now],
+    );
   } catch (error) {
     if (isUniqueViolation(error)) {
       throw new AppError("CONFLICT", "Ya existe un destinatario con ese alias.", { alias });
     }
     throw error;
   }
-  recordAudit(deps.db, "recipient.created", "recipient", id, { alias });
-  return getRecipientById(deps.db, id) as RecipientRow;
+  await recordAudit(deps.db, "recipient.created", "recipient", id, { alias });
+  return (await getRecipientById(deps.db, id)) as RecipientRow;
 }
 
-export function listRecipients(db: Db, userId: string): RecipientRow[] {
-  return db
-    .prepare(
-      `SELECT * FROM recipients WHERE user_id = ? ORDER BY alias ASC, created_at ASC`,
-    )
-    .all(userId) as RecipientRow[];
+export async function listRecipients(db: Db, userId: string): Promise<RecipientRow[]> {
+  return db.all<RecipientRow>(
+    `SELECT * FROM recipients WHERE user_id = ? ORDER BY alias ASC, created_at ASC`,
+    [userId],
+  );
 }
 
-export function getRecipientById(db: Db, id: string): RecipientRow | undefined {
-  return db.prepare("SELECT * FROM recipients WHERE id = ?").get(id) as RecipientRow | undefined;
+export async function getRecipientById(db: Db, id: string): Promise<RecipientRow | undefined> {
+  return db.get<RecipientRow>("SELECT * FROM recipients WHERE id = ?", [id]);
 }
 
-export function getRecipientByAlias(db: Db, userId: string, alias: string): RecipientRow | undefined {
-  return db
-    .prepare("SELECT * FROM recipients WHERE user_id = ? AND alias = ? COLLATE NOCASE")
-    .get(userId, alias.trim()) as RecipientRow | undefined;
+export async function getRecipientByAlias(
+  db: Db,
+  userId: string,
+  alias: string,
+): Promise<RecipientRow | undefined> {
+  return db.get<RecipientRow>(
+    `SELECT * FROM recipients WHERE user_id = ? AND lower(alias) = lower(?)`,
+    [userId, alias.trim()],
+  );
 }

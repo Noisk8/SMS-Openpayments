@@ -52,16 +52,17 @@ export function registerJobHandlers(processor: JobProcessor, deps: JobHandlerDep
     if (!smsId) {
       return;
     }
-    const inbound = getInboundSms(deps.db, smsId);
+    const inbound = await getInboundSms(deps.db, smsId);
     if (!inbound) {
       return;
     }
     const outcome = await runCommand(deps, inbound);
     // Mark as handled before delivery: an interrupted lease must not replay a
     // command that creates a payment (PAGAR would otherwise be duplicated).
-    deps.db
-      .prepare(`UPDATE sms_messages SET processed_at = ? WHERE id = ? AND processed_at IS NULL`)
-      .run(nowIso(), smsId);
+    await deps.db.run(
+      `UPDATE sms_messages SET processed_at = ? WHERE id = ? AND processed_at IS NULL`,
+      [nowIso(), smsId],
+    );
 
     await sendOutboundSms(deps.db, deps.sms, {
       to: inbound.from,
@@ -76,7 +77,7 @@ export function registerJobHandlers(processor: JobProcessor, deps: JobHandlerDep
     if (!paymentId) {
       return;
     }
-    const token = accessToken ?? resolveStoredAccessToken(deps, paymentId);
+    const token = accessToken ?? (await resolveStoredAccessToken(deps, paymentId));
     await reconcilePayment(
       { db: deps.db, provider: deps.provider, ...(token ? { accessToken: token } : {}) },
       { paymentId, ...(token ? { accessToken: token } : {}) },
@@ -85,14 +86,15 @@ export function registerJobHandlers(processor: JobProcessor, deps: JobHandlerDep
 
   // --- Recovery inspectors (inspect, do not replay blindly) -----------------
 
-  processor.registerRecovery("process_inbound_sms", (job) => {
+  processor.registerRecovery("process_inbound_sms", async (job) => {
     const { smsId } = parsePayload<ProcessInboundPayload>(job.payload);
     if (!smsId) {
       return "complete";
     }
-    const row = deps.db
-      .prepare(`SELECT processed_at FROM sms_messages WHERE id = ?`)
-      .get(smsId) as { processed_at: string | null } | undefined;
+    const row = await deps.db.get<{ processed_at: string | null }>(
+      `SELECT processed_at FROM sms_messages WHERE id = ?`,
+      [smsId],
+    );
     if (!row) {
       return "complete";
     }
@@ -100,12 +102,12 @@ export function registerJobHandlers(processor: JobProcessor, deps: JobHandlerDep
     return row.processed_at ? "complete" : "requeue";
   });
 
-  processor.registerRecovery("reconcile_payment", (job) => {
+  processor.registerRecovery("reconcile_payment", async (job) => {
     const { paymentId } = parsePayload<ReconcilePayload>(job.payload);
     if (!paymentId) {
       return "complete";
     }
-    const payment = getPayment(deps.db, paymentId);
+    const payment = await getPayment(deps.db, paymentId);
     if (!payment) {
       return "complete";
     }
@@ -115,21 +117,20 @@ export function registerJobHandlers(processor: JobProcessor, deps: JobHandlerDep
 }
 
 /** Decrypts the newest non-expired stored grant token for a payment's wallet. */
-function resolveStoredAccessToken(deps: JobHandlerDeps, paymentId: string): string | undefined {
+async function resolveStoredAccessToken(deps: JobHandlerDeps, paymentId: string): Promise<string | undefined> {
   if (!deps.secretBox) {
     return undefined;
   }
-  const payment = getPayment(deps.db, paymentId);
+  const payment = await getPayment(deps.db, paymentId);
   if (!payment) {
     return undefined;
   }
-  const rows = deps.db
-    .prepare(
-      `SELECT access_token_enc, expires_at FROM grants
-        WHERE wallet_id = ? AND status = 'GRANTED' AND access_token_enc IS NOT NULL
-        ORDER BY created_at DESC, rowid DESC`,
-    )
-    .all(payment.senderWalletId) as Array<{ access_token_enc: string; expires_at: string | null }>;
+  const rows = await deps.db.all<{ access_token_enc: string; expires_at: string | null }>(
+    `SELECT access_token_enc, expires_at FROM grants
+      WHERE wallet_id = ? AND status = 'GRANTED' AND access_token_enc IS NOT NULL
+      ORDER BY created_at DESC, seq DESC`,
+    [payment.senderWalletId],
+  );
   for (const row of rows) {
     if (row.expires_at && isPast(row.expires_at)) {
       continue;

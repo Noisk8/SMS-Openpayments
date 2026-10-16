@@ -16,16 +16,16 @@ describe("webhook SMS", () => {
   let provider: MockSmsProvider;
   let app: ReturnType<typeof buildApp>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     const config = testConfig();
-    db = testDb();
+    db = await testDb();
     provider = new MockSmsProvider(config.SMS_WEBHOOK_SECRET);
     app = buildApp({ config, db, provider, paymentProvider: testPaymentProvider(), secretBox: null });
   });
 
   afterEach(async () => {
     await app.close();
-    db.close();
+    await db.close();
   });
 
   it("persiste un SMS real y responde 200", async () => {
@@ -36,8 +36,8 @@ describe("webhook SMS", () => {
       payload: inboundPayload,
     });
     expect(res.statusCode).toBe(200);
-    const count = db.prepare("SELECT COUNT(*) AS n FROM sms_messages").get() as { n: number };
-    expect(count.n).toBe(1);
+    const count = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM sms_messages");
+    expect(count?.n).toBe(1);
   });
 
   it("reconoce un duplicado sin repetir efectos de negocio", async () => {
@@ -54,10 +54,10 @@ describe("webhook SMS", () => {
     expect(first.statusCode).toBe(200);
     expect(second.statusCode).toBe(200);
 
-    const messages = db.prepare("SELECT COUNT(*) AS n FROM sms_messages").get() as { n: number };
-    const jobs = db.prepare("SELECT COUNT(*) AS n FROM jobs").get() as { n: number };
-    expect(messages.n).toBe(1);
-    expect(jobs.n).toBe(1);
+    const messages = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM sms_messages");
+    const jobs = await db.get<{ n: number }>("SELECT COUNT(*) AS n FROM jobs");
+    expect(messages?.n).toBe(1);
+    expect(jobs?.n).toBe(1);
   });
 
   it("rechaza una firma inválida con 401", async () => {

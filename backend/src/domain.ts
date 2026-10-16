@@ -1,4 +1,4 @@
-/** Tipos y enums del dominio. Se guardan como TEXT en SQLite. */
+/** Tipos y enums del dominio. Se guardan como TEXT en PostgreSQL. */
 
 export type UserStatus = "pending" | "active" | "suspended";
 
