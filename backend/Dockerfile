@@ -1,14 +1,14 @@
 # syntax=docker/dockerfile:1
 
 # Production image for the SMS + Open Payments backend.
-# tsx is required at runtime (the server runs TypeScript directly), so the image
-# installs all dependencies rather than only production ones.
+# The server runs TypeScript directly, so `tsx` is a runtime dependency.
+# Dev-only tools (vitest, embedded-postgres, typescript, @types) are skipped.
 FROM node:22-slim
 
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci --omit=dev
 
 COPY . .
 
