@@ -39,6 +39,10 @@ export interface FakeProviderOptions {
   nonInteractiveGrant?: boolean;
   /** Estado inicial de un outgoing-payment recién creado. */
   initialOutgoingStatus?: OutgoingPaymentStatus;
+  /** TTL del access token emitido, en ms (0 = sin expiración). */
+  accessTokenTtlMs?: number;
+  /** Retardo artificial de la rotación, para probar la exclusión mutua. */
+  rotationDelayMs?: number;
 }
 
 export interface RegisterWalletOptions {
@@ -69,7 +73,11 @@ interface FakeGrantedToken {
   walletAddress: string;
   limit: Amount | null;
   spent: Amount | null;
-  status: "active" | "cancelled" | "revoked";
+  status: "active" | "rotated" | "cancelled" | "revoked";
+  /** Management URI issued for this token (`access_token.manage`). */
+  manageUri: string;
+  /** Token expiry as ISO-8601 UTC, or null when the token does not expire. */
+  expiresAt: string | null;
 }
 
 interface FakeQuote {
@@ -103,6 +111,8 @@ export class FakePaymentProvider implements PaymentProvider {
   private readonly defaultGrantLimit: Amount;
   private readonly nonInteractiveGrant: boolean;
   private readonly initialOutgoingStatus: OutgoingPaymentStatus;
+  private readonly accessTokenTtlMs: number;
+  private readonly rotationDelayMs: number;
 
   private seq = 0;
   private readonly wallets = new Map<string, FakeWallet>();
@@ -113,6 +123,8 @@ export class FakePaymentProvider implements PaymentProvider {
   private readonly outgoingPayments = new Map<string, FakeOutgoingPayment>();
   private readonly failNextGetWallets = new Set<string>();
   private failNextCreate: AppError | null = null;
+  private failNextRotationError: AppError | null = null;
+  private lastGrantRequest: OutgoingGrantRequest | null = null;
 
   constructor(options: FakeProviderOptions = {}) {
     this.now = options.now ?? (() => new Date());
@@ -121,6 +133,8 @@ export class FakePaymentProvider implements PaymentProvider {
     this.defaultGrantLimit = options.defaultGrantLimit ?? { value: "1000000", currency: "COP", assetScale: 0 };
     this.nonInteractiveGrant = options.nonInteractiveGrant ?? false;
     this.initialOutgoingStatus = options.initialOutgoingStatus ?? "PROCESSING";
+    this.accessTokenTtlMs = options.accessTokenTtlMs ?? 600_000;
+    this.rotationDelayMs = options.rotationDelayMs ?? 0;
   }
 
   // --- Controles de simulación (no forman parte de la frontera) --------------
@@ -188,6 +202,36 @@ export class FakePaymentProvider implements PaymentProvider {
       error ?? new AppError("PROVIDER_ERROR", "Timeout simulado al crear el outgoing-payment (resultado incierto).");
   }
 
+  /** Expira un token emitido de inmediato (simula que venció el TTL del AS). */
+  expireAccessToken(accessToken: string): void {
+    const grant = this.grantedTokens.get(accessToken);
+    if (!grant) {
+      throw new AppError("NOT_FOUND", `Access token desconocido: ${accessToken}`);
+    }
+    grant.expiresAt = new Date(this.now().getTime() - 1000).toISOString();
+  }
+
+  /** Hace fallar la siguiente rotación (por defecto, error transitorio). */
+  failNextRotation(error?: AppError): void {
+    this.failNextRotationError =
+      error ?? new AppError("PROVIDER_ERROR", "Fallo simulado al rotar el access token.");
+  }
+
+  /** Última petición de grant de outgoing recibida (para aserciones de `limits`). */
+  lastOutgoingGrantRequest(): OutgoingGrantRequest | null {
+    return this.lastGrantRequest;
+  }
+
+  /** URI de gestión emitida para un token (introspección para pruebas). */
+  accessTokenManageUri(accessToken: string): string | null {
+    return this.grantedTokens.get(accessToken)?.manageUri ?? null;
+  }
+
+  /** Expiración emitida para un token (introspección para pruebas). */
+  accessTokenExpiry(accessToken: string): string | null {
+    return this.grantedTokens.get(accessToken)?.expiresAt ?? null;
+  }
+
   // --- WalletDirectory -------------------------------------------------------
 
   async getWalletMetadata(walletAddress: string): Promise<WalletMetadata> {
@@ -237,6 +281,7 @@ export class FakePaymentProvider implements PaymentProvider {
 
   async requestOutgoingGrant(input: OutgoingGrantRequest): Promise<PendingGrant | GrantedAccess> {
     this.requireWallet(input.wallet.walletAddress);
+    this.lastGrantRequest = input;
     const limit = input.limit;
     if (this.nonInteractiveGrant) {
       return this.issueToken(input.wallet.walletAddress, limit);
@@ -359,13 +404,32 @@ export class FakePaymentProvider implements PaymentProvider {
     }
   }
 
-  async rotateAccessToken(input: { wallet: WalletMetadata; accessToken: string }): Promise<GrantedAccess | null> {
+  async rotateAccessToken(input: {
+    wallet: WalletMetadata;
+    accessToken: string;
+    manageUri?: string;
+  }): Promise<GrantedAccess | null> {
     const grant = this.grantedTokens.get(input.accessToken);
     if (!grant || grant.status !== "active") {
       return null;
     }
-    grant.status = "cancelled";
-    this.grantedTokens.set(input.accessToken, grant);
+    // Rotation only works while the current token is still valid.
+    if (grant.expiresAt && Date.parse(grant.expiresAt) <= this.now().getTime()) {
+      return null;
+    }
+    // The management URI must match the one issued with the token.
+    if (input.manageUri !== undefined && input.manageUri !== grant.manageUri) {
+      return null;
+    }
+    if (this.failNextRotationError) {
+      const error = this.failNextRotationError;
+      this.failNextRotationError = null;
+      throw error;
+    }
+    if (this.rotationDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, this.rotationDelayMs));
+    }
+    grant.status = "rotated";
     return this.issueToken(grant.walletAddress, grant.limit ?? undefined, grant.spent ?? undefined);
   }
 
@@ -400,14 +464,22 @@ export class FakePaymentProvider implements PaymentProvider {
   }
 
   private issueToken(walletAddress: string, limit?: Amount, spent?: Amount): GrantedAccess {
+    const wallet = this.requireWallet(walletAddress);
     const token = this.nextId("access-token");
+    const expiresAt =
+      this.accessTokenTtlMs > 0
+        ? new Date(this.now().getTime() + this.accessTokenTtlMs).toISOString()
+        : null;
+    const manageUri = `${wallet.metadata.authServer.replace(/\/$/, "")}/token/${token}`;
     this.grantedTokens.set(token, {
       walletAddress,
       limit: limit ?? null,
       spent: spent ?? (limit ? { ...limit, value: "0" } : null),
       status: "active",
+      manageUri,
+      expiresAt,
     });
-    return { kind: "granted", accessToken: token, expiresAt: null };
+    return { kind: "granted", accessToken: token, expiresAt, manageUri };
   }
 
   /** Aplica una transición de estado y contabiliza el consumo del grant. */

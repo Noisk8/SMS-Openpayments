@@ -3,6 +3,8 @@ import type { Db } from "../db";
 import { getAssignmentById } from "../demo/repository";
 import { DEMO_TOPUP_JOB, isDemoFundingSettled, runDemoTopUp } from "../demo/service";
 import { isTerminal } from "../domain";
+import { rotateGrantToken } from "../grants/service";
+import { getGrantRow } from "../onboarding/service";
 import { reconcilePayment } from "../payments/reconciliation";
 import { getPayment } from "../payments/service";
 import type { PaymentProvider } from "../payments/types";
@@ -12,6 +14,7 @@ import { getInboundSms, sendOutboundSms } from "../sms/service";
 import type { SmsProvider } from "../sms/types";
 import { isPast, nowIso } from "../util/time";
 import type { JobProcessor } from "./processor";
+import { ROTATE_GRANT_TOKEN_JOB, type RotationJobPayload } from "./rotation";
 
 /**
  * Wiring between the SMS pipeline and the payment domain (spec §5, §9, §12).
@@ -103,6 +106,28 @@ export function registerJobHandlers(processor: JobProcessor, deps: JobHandlerDep
     );
   });
 
+  // Rotates an access token shortly before it expires, so a granted grant stays
+  // usable without re-consent. The rotation service is single-flight and flags
+  // the grant when a fresh consent is required; it also schedules the next run.
+  processor.register(ROTATE_GRANT_TOKEN_JOB, async (job) => {
+    const { grantId, expectedExpiresAt } = parsePayload<RotationJobPayload>(job.payload);
+    if (!grantId) {
+      return;
+    }
+    const grant = await getGrantRow(deps.db, grantId);
+    if (!grant || grant.status !== "GRANTED" || grant.requires_reconsent) {
+      return;
+    }
+    // A stale schedule: another rotation already advanced the expiry.
+    if (expectedExpiresAt !== undefined && grant.expires_at !== expectedExpiresAt) {
+      return;
+    }
+    await rotateGrantToken(
+      { config: deps.config, db: deps.db, provider: deps.provider, secretBox: deps.secretBox },
+      grantId,
+    );
+  });
+
   // --- Recovery inspectors (inspect, do not replay blindly) -----------------
 
   processor.registerRecovery("process_inbound_sms", async (job) => {
@@ -146,6 +171,19 @@ export function registerJobHandlers(processor: JobProcessor, deps: JobHandlerDep
     // Already settled: nothing to redo. Otherwise requeue to reconcile.
     return isDemoFundingSettled(assignment.funding_status) ? "complete" : "requeue";
   });
+
+  processor.registerRecovery(ROTATE_GRANT_TOKEN_JOB, async (job) => {
+    const { grantId } = parsePayload<RotationJobPayload>(job.payload);
+    if (!grantId) {
+      return "complete";
+    }
+    const grant = await getGrantRow(deps.db, grantId);
+    if (!grant || grant.status !== "GRANTED" || grant.requires_reconsent) {
+      return "complete";
+    }
+    // If the token already expired there is nothing to rotate: consent is needed.
+    return grant.expires_at && isPast(grant.expires_at) ? "complete" : "requeue";
+  });
 }
 
 /** Decrypts the newest non-expired stored grant token for a payment's wallet. */
@@ -160,6 +198,7 @@ async function resolveStoredAccessToken(deps: JobHandlerDeps, paymentId: string)
   const rows = await deps.db.all<{ access_token_enc: string; expires_at: string | null }>(
     `SELECT access_token_enc, expires_at FROM grants
       WHERE wallet_id = ? AND status = 'GRANTED' AND access_token_enc IS NOT NULL
+        AND requires_reconsent = 0
       ORDER BY created_at DESC, seq DESC`,
     [payment.senderWalletId],
   );

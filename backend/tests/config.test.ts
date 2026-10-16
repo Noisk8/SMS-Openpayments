@@ -49,4 +49,14 @@ describe("config", () => {
       loadConfig(base({ DEMO_WALLET_ASSIGNMENT_ENABLED: "true", DEMO_TOPUP_AMOUNT: "0" })),
     ).toThrow();
   });
+
+  it("acepta un intervalo de grant válido y rechaza uno malformado", () => {
+    const unset = loadConfig(base());
+    expect(unset.OP_GRANT_INTERVAL).toBe("");
+
+    const valid = loadConfig(base({ OP_GRANT_INTERVAL: "R1/2026-10-16T00:00:00Z/P1Y" }));
+    expect(valid.OP_GRANT_INTERVAL).toBe("R1/2026-10-16T00:00:00Z/P1Y");
+
+    expect(() => loadConfig(base({ OP_GRANT_INTERVAL: "cada mes" }))).toThrow();
+  });
 });

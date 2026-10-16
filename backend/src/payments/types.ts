@@ -56,6 +56,12 @@ export interface GrantedAccess {
   kind: "granted";
   accessToken: string;
   expiresAt: string | null;
+  /**
+   * Management URI for this access token (`access_token.manage`). Needed to
+   * rotate the token without re-consent. It is not a bearer credential but it
+   * must never be logged.
+   */
+  manageUri?: string | null;
 }
 
 export interface OutgoingGrantRequest {
@@ -63,6 +69,12 @@ export interface OutgoingGrantRequest {
   limit: Amount;
   finishUri: string;
   nonce: string;
+  /**
+   * ISO-8601/GNAP repeating interval for the grant budget window, e.g.
+   * `R1/2026-10-16T00:00:00Z/P1Y` (repetitions / start / period). When set, it
+   * is sent in `limits.interval` alongside the debitAmount limit.
+   */
+  interval?: string;
 }
 
 export interface CreateOutgoingPaymentInput {
@@ -105,6 +117,8 @@ export interface PaymentProvider extends WalletDirectory {
   rotateAccessToken(input: {
     wallet: WalletMetadata;
     accessToken: string;
+    /** Management URI from the token being rotated (`access_token.manage`). */
+    manageUri?: string;
   }): Promise<GrantedAccess | null>;
   revokeAccessToken(input: { wallet: WalletMetadata; accessToken: string }): Promise<void>;
 }

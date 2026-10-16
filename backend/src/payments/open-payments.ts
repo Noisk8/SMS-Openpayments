@@ -182,7 +182,10 @@ export class OpenPaymentsProvider implements PaymentProvider {
                 type: AccessType.OutgoingPayment,
                 actions: [AccessAction.Create, AccessAction.Read],
                 identifier: input.wallet.walletAddress,
-                limits: { debitAmount: toOpAmount(input.limit) },
+                limits: {
+                  debitAmount: toOpAmount(input.limit),
+                  ...(input.interval ? { interval: input.interval } : {}),
+                },
               },
             ] as never,
           },
@@ -390,7 +393,9 @@ function mapOutgoingPayment(outgoing: OpOutgoingPayment): OutgoingPayment {
   };
 }
 
-function toGrantedAccess(accessToken: { value: string; expires_in?: number } | undefined): GrantedAccess | null {
+function toGrantedAccess(
+  accessToken: { value: string; expires_in?: number; manage?: string } | undefined,
+): GrantedAccess | null {
   if (!accessToken?.value) {
     return null;
   }
@@ -400,6 +405,7 @@ function toGrantedAccess(accessToken: { value: string; expires_in?: number } | u
     expiresAt: accessToken.expires_in
       ? new Date(Date.now() + accessToken.expires_in * 1000).toISOString()
       : null,
+    manageUri: accessToken.manage ?? null,
   };
 }
 

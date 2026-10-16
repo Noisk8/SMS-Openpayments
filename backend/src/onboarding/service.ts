@@ -4,6 +4,7 @@ import type { Db, Queryable } from "../db";
 import { isUniqueViolation } from "../db/errors";
 import type { Amount, UserStatus } from "../domain";
 import { AppError } from "../errors";
+import { scheduleGrantTokenRotation } from "../jobs/rotation";
 import type { PaymentProvider, WalletMetadata } from "../payments/types";
 import type { SecretBox } from "../security/encryption";
 import { isPast, isoPlusSeconds, nowIso } from "../util/time";
@@ -55,10 +56,16 @@ export interface GrantRow {
   limit_currency: string | null;
   limit_scale: number | null;
   access_token_enc: string | null;
+  /** Management URI for the current access token (`access_token.manage`). */
+  access_token_manage_uri: string | null;
   continue_uri: string | null;
   continue_token_enc: string | null;
   interact_url: string | null;
   expires_at: string | null;
+  /** 1 when the token can no longer be rotated and a fresh consent is required. */
+  requires_reconsent: number;
+  last_rotation_error: string | null;
+  rotation_lock_until: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -321,6 +328,7 @@ export async function connectWallet(
     limit,
     finishUri,
     nonce: randomUUID(),
+    ...(deps.config.OP_GRANT_INTERVAL ? { interval: deps.config.OP_GRANT_INTERVAL } : {}),
   });
 
   if (pending.kind === "pending") {
@@ -358,8 +366,8 @@ export async function connectWallet(
   await deps.db.run(
     `INSERT INTO grants
        (id, wallet_id, status, scopes, limit_value, limit_currency, limit_scale,
-        access_token_enc, expires_at, created_at, updated_at)
-     VALUES (?, ?, 'GRANTED', ?, ?, ?, ?, ?, ?, ?, ?)`,
+        access_token_enc, access_token_manage_uri, expires_at, created_at, updated_at)
+     VALUES (?, ?, 'GRANTED', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       grantId,
       walletId,
@@ -368,12 +376,15 @@ export async function connectWallet(
       limit.currency,
       limit.assetScale,
       secretBox.encrypt(pending.accessToken),
+      pending.manageUri ?? null,
       pending.expiresAt,
       now,
       now,
     ],
   );
   await recordAudit(deps.db, "grant.granted", "grant", grantId, { walletId });
+  // Keep the token usable over hours without re-consent (rotate before expiry).
+  await scheduleGrantTokenRotation(deps.db, { grantId, expiresAt: pending.expiresAt });
   return {
     wallet: {
       id: walletId,
@@ -422,10 +433,12 @@ export async function completeGrantCallback(
   const now = nowIso();
   await deps.db.run(
     `UPDATE grants
-        SET status = 'GRANTED', access_token_enc = ?, continue_token_enc = NULL, expires_at = ?, updated_at = ?
+        SET status = 'GRANTED', access_token_enc = ?, access_token_manage_uri = ?,
+            continue_token_enc = NULL, expires_at = ?, requires_reconsent = 0, updated_at = ?
       WHERE id = ?`,
-    [secretBox.encrypt(granted.accessToken), granted.expiresAt, now, grant.id],
+    [secretBox.encrypt(granted.accessToken), granted.manageUri ?? null, granted.expiresAt, now, grant.id],
   );
   await recordAudit(deps.db, "grant.granted", "grant", grant.id, { via: "callback" });
+  await scheduleGrantTokenRotation(deps.db, { grantId: grant.id, expiresAt: granted.expiresAt });
   return { id: grant.id, status: "GRANTED" };
 }

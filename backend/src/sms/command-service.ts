@@ -3,6 +3,7 @@ import type { AppConfig } from "../config";
 import type { Db } from "../db";
 import type { Amount, PaymentState } from "../domain";
 import { formatForDisplay } from "../payments/amount";
+import { scheduleGrantTokenRotation } from "../jobs/rotation";
 import {
   executePayment,
   preparePayment,
@@ -446,8 +447,10 @@ async function resolveOutgoingAccess(deps: CommandServiceDeps, payment: PaymentR
       status: "GRANTED",
       limit,
       accessTokenEnc: deps.secretBox.encrypt(requested.accessToken),
+      manageUri: requested.manageUri ?? null,
       expiresAt: requested.expiresAt,
     });
+    await scheduleGrantTokenRotation(deps.db, { grantId, expiresAt: requested.expiresAt });
     return { kind: "granted", accessToken: requested.accessToken };
   }
 
@@ -471,6 +474,7 @@ async function findValidGrant(deps: CommandServiceDeps, walletId: string): Promi
   const rows = await deps.db.all<{ access_token_enc: string; expires_at: string | null }>(
     `SELECT access_token_enc, expires_at FROM grants
       WHERE wallet_id = ? AND status = 'GRANTED' AND access_token_enc IS NOT NULL
+        AND requires_reconsent = 0
       ORDER BY created_at DESC, seq DESC`,
     [walletId],
   );
@@ -493,6 +497,7 @@ interface StoreGrantInput {
   status: "GRANTED" | "PENDING_INTERACTION";
   limit: Amount;
   accessTokenEnc?: string;
+  manageUri?: string | null;
   continueUri?: string;
   continueTokenEnc?: string;
   interactUrl?: string;
@@ -504,8 +509,9 @@ async function storeGrant(deps: CommandServiceDeps, input: StoreGrantInput): Pro
   await deps.db.run(
     `INSERT INTO grants
        (id, wallet_id, status, scopes, limit_value, limit_currency, limit_scale,
-        access_token_enc, continue_uri, continue_token_enc, interact_url, expires_at, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        access_token_enc, access_token_manage_uri, continue_uri, continue_token_enc, interact_url,
+        expires_at, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       input.id,
       input.walletId,
@@ -515,6 +521,7 @@ async function storeGrant(deps: CommandServiceDeps, input: StoreGrantInput): Pro
       input.limit.currency,
       input.limit.assetScale,
       input.accessTokenEnc ?? null,
+      input.manageUri ?? null,
       input.continueUri ?? null,
       input.continueTokenEnc ?? null,
       input.interactUrl ?? null,
@@ -565,7 +572,7 @@ async function latestWallet(db: Db, userId: string): Promise<WalletRow | undefin
 
 /** Wraps the payment provider for the payment service boundary. */
 function paymentDeps(deps: CommandServiceDeps): PaymentServiceDeps {
-  return { db: deps.db, provider: deps.provider };
+  return { db: deps.db, provider: deps.provider, config: deps.config };
 }
 
 // --- Amount parsing ---------------------------------------------------------
