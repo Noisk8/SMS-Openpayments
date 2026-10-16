@@ -167,3 +167,99 @@ the pool repository, the recipients service and the payments/jobs flow; no paral
 - No `frontend/**` file was touched and migrations `001`–`005` were left unchanged. Prompt recorded
   verbatim in
   [`prompts/2026-10-16-demo-external-recipient.md`](prompts/2026-10-16-demo-external-recipient.md).
+## Chasky: identidad, acceso por celular y dashboard
+
+OpenAI Codex implementó el cambio de nombre visible a Chasky y el dashboard en
+`frontend/src/app/{login,dashboard,api/customer}/`, los componentes `phone-login.tsx`
+y `customer-dashboard.tsx`, los estilos, navegación y configuración de ejemplo.
+En el backend añadió `backend/src/customer/`, `005_customer_login.sql`, registro
+de rutas y pruebas `customer.test.ts`, con actualización del helper de pruebas.
+Se documentó el funcionamiento en `frontend/README.md`. Estos archivos tienen
+asistencia de IA. Las implementaciones existentes de proveedores de pagos y SMS,
+las migraciones anteriores y el motor PostgreSQL no se modificaron en esta tarea.
+Prompt real: `prompts/2026-10-16-chasky-dashboard.md`.
+
+### Registro de usuario de prueba
+
+Codex registró el teléfono solicitado en el PostgreSQL indicado por el usuario usando
+`registerWithDemoWallet`. La función en `backend/src/demo/service.ts` restringe ahora
+su tipo de dependencias a `config` y `db`, los únicos que usa para registrar y encolar
+el abono. Se mantuvieron intactos los estados de verificación, autorización y abono.
+No se guardaron credenciales suministradas en archivos versionados.
+
+### Contraseña de prueba solicitada
+
+Codex añadió el acceso con contraseña restringido a desarrollo con SMS mock,
+`006_test_password_login.sql`, el comando `backend/scripts/set-test-password.ts`,
+pruebas y documentación. No se modifica el estado de verificación del usuario.
+Las contraseñas se guardan con scrypt y sal aleatoria; el acceso normal por OTP se conserva.
+
+### Limpieza de ramas Rafiki y Twilio
+
+Codex revisó las ramas y PR de GitHub, respaldó las ramas relacionadas en un bundle
+local y eliminó sus referencias locales y remotas. Se conservaron main, los cambios
+locales de Chasky y el stash previo. Esta operación no retira código ya fusionado en main.
+No hubo modificaciones de código de aplicación por esta limpieza; solo este registro
+y `prompts/2026-10-16-eliminar-ramas-rafiki-twilio.md` tienen cambios documentales de IA.
+
+## Retiro de integraciones de proveedores
+
+Por solicitud del usuario, Codex eliminó el adaptador y dependencia Twilio, el código
+administrado Rafiki, sus webhooks, scripts, Compose, variables, pruebas específicas y
+la migración de cuentas administradas de las instalaciones nuevas. Actualizó el dashboard
+para consultar exclusivamente las billeteras, grants y pagos Open Payments. Se conserva
+el simulador SMS mock, PostgreSQL, el pool de billeteras, el login y el frontend Chasky.
+Las tablas de instalaciones existentes no se borran ni se toca la base compartida.
+El registro histórico de prompts y uso de IA se conserva como evidencia del hackatón.
+
+### Asociación de wallet Chasky
+
+Codex comprobó los metadatos y la correspondencia de la clave privada aportada con
+la clave pública de la wallet solicitada. Añadió la asociación de la cuenta indicada
+en una transacción, conservando su wallet anterior y sus estados de verificación.
+La clave privada se utilizó únicamente en memoria y no se guardó en el repositorio
+ni en la base de datos. No se generaron grants ni se movieron fondos.
+Esta intervención cambia datos de prueba y este registro documental; no altera código.
+
+### Acceso directo por contraseña en el entorno local
+
+Codex configuró el entorno local privado para usar la base compartida y habilitar el
+acceso de prueba; seleccionó la contraseña por defecto en el formulario. El servidor
+permite desactivar trabajos mediante JOB_WORKER_ENABLED y carga la clave de Open Payments
+cuando se usa el proveedor. Se verificó en navegador el acceso del usuario solicitado y
+su wallet en el dashboard. Se añadieron pruebas y documentación; no se guardaron secretos
+en archivos versionados.
+
+### Movimientos recibidos fuera del backend
+
+Codex implementó el gateway y servicio de historial en backend/src/customer/history*,
+la migración 007_wallet_history.sql, rutas de lectura y consentimiento, configuración,
+pruebas y conexión en el dashboard. Consultó la guía oficial y los tipos del SDK.
+El usuario autorizó expresamente list-all para su propia wallet después de que la
+revisión automática rechazara ampliar el permiso sin esa aclaración. Se pide
+consentimiento al proveedor; no se crean permisos de envío ni se mueven fondos.
+La clave aportada previamente se guarda solo en un archivo local ignorado con permisos
+600 para que el cliente de lectura sobreviva reinicios; los tokens se cifran en base.
+No se incluyen secretos en este registro ni en los prompts versionados.
+
+Validación final del historial: 90 pruebas aprobadas y compilación del frontend correcta.
+Desde la sesión autenticada del usuario, la API confirmó historial conectado y dos
+recursos de ingresos completados tras el consentimiento del titular. No se registraron
+claves, tokens ni enlaces de autorización en archivos versionados.
+
+### Consulta de saldo solicitada
+
+Codex revisó las APIs oficiales de Open Payments y el código público de Test Wallet.
+El saldo se consulta en su backend privado con sesión de titular; el permiso de historial
+no lo proporciona. Se corrigieron los mensajes en backend/src/customer/routes.ts y la
+tarjeta del dashboard, añadiendo un enlace a Test Wallet y una prueba que evita presentar
+un ingreso como saldo disponible. Falta la API autenticada de saldo del proveedor para
+mostrar su saldo real dentro de Chasky. No se inventaron importes ni se amplió ningún grant.
+
+## Publicación de Chasky
+
+Codex revisó el conjunto de cambios de Chasky, el login, el historial y el retiro de
+integraciones, verificó los archivos privados ignorados y preparó la integración con
+los cambios recientes de main antes de subir. Se conserva el historial de prompts
+por las reglas del hackatón; sus referencias antiguas a proveedores no son integraciones
+activas. Los archivos de entorno y las claves permanecen fuera de Git.

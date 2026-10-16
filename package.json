@@ -13,11 +13,6 @@
     "test": "npm --prefix backend test",
     "verify": "npm --prefix backend run verify && npm --prefix frontend run typecheck",
     "db:migrate": "npm --prefix backend run db:migrate",
-    "setup:rafiki": "npm --prefix backend run setup:rafiki",
-    "rafiki:up": "docker compose --env-file backend/.env -f infra/rafiki/compose.yaml up -d",
-    "rafiki:down": "docker compose --env-file backend/.env -f infra/rafiki/compose.yaml down",
-    "rafiki:logs": "docker compose --env-file backend/.env -f infra/rafiki/compose.yaml logs --tail 60 rafiki-backend",
-    "smoke:rafiki": "npm --prefix backend run smoke:rafiki",
     "dev:frontend": "npm --prefix frontend run dev",
     "build:frontend": "npm --prefix frontend run build",
     "start:frontend": "npm --prefix frontend start"

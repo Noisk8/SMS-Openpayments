@@ -3,9 +3,8 @@
 This backend runs in `PAYMENT_PROVIDER=openpayments` mode against the Interledger test network.
 The Test Wallet uses play money only. Do not use real funds or real personal data here.
 
-The application is an Open Payments client. It does not operate a Rafiki node and does not use any
-admin API. Each user's money stays in a wallet address that the user controls, and payments require
-the user's consent through a grant.
+The application is an Open Payments client. Each user's money stays in a wallet address
+that the user controls, and payments require the user's consent through a grant.
 
 ## 1. Create the accounts (manual, in the browser)
 

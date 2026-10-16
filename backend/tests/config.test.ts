@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { OpenPaymentsProvider } from "../src/payments/open-payments";
 import { loadConfig } from "../src/config";
 import { testDatabaseUrl } from "./helpers";
 
@@ -59,4 +60,16 @@ describe("config", () => {
 
     expect(() => loadConfig(base({ OP_GRANT_INTERVAL: "cada mes" }))).toThrow();
   });
+  it("rechaza proveedores retirados", () => {
+    expect(() => loadConfig(base({ PAYMENT_PROVIDER: "rafiki" }))).toThrow();
+    expect(() => loadConfig(base({ SMS_PROVIDER: "twilio" }))).toThrow();
+  });
+
+  it("permite iniciar el login sin leer la clave del proveedor y falla al intentar usar una clave ausente", async () => {
+    const config = loadConfig(base({ PAYMENT_PROVIDER: "openpayments", OP_CLIENT_WALLET_ADDRESS: "https://wallet.example/client", OP_KEY_ID: "test-key", OP_PRIVATE_KEY_PATH: "/missing-chasky-test-key.pem" }));
+    const provider = OpenPaymentsProvider.fromConfig(config);
+    expect(provider.name).toBe("openpayments");
+    await expect(provider.getWalletMetadata("https://wallet.example/user")).rejects.toMatchObject({ code: "PROVIDER_ERROR" });
+  });
+
 });

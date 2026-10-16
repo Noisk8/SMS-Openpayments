@@ -10,8 +10,10 @@ const envSchema = z
 
   ADMIN_API_TOKEN: z.string().min(1).default("dev-admin-token"),
   ENCRYPTION_KEY: z.string().default(""),
+  JOB_WORKER_ENABLED: z.enum(["true", "false"]).default("true"),
+  TEST_PASSWORD_LOGIN_ENABLED: z.enum(["true", "false"]).default("false"),
 
-  PAYMENT_PROVIDER: z.enum(["fake", "openpayments", "rafiki"]).default("fake"),
+  PAYMENT_PROVIDER: z.enum(["fake", "openpayments"]).default("fake"),
   PAYMENT_CURRENCY: z
     .string()
     .regex(/^[A-Z]{3}$/, "Debe ser un código ISO 4217 de 3 letras")
@@ -42,13 +44,10 @@ const envSchema = z
    */
   DEMO_EXTERNAL_ALIAS: z.string().trim().min(1).max(64).default("EXTERNAL"),
 
-  RAFIKI_TEST_MODE: z.enum(["true", "false"]).default("false"),
-  RAFIKI_ADMIN_URL: z.string().default("http://127.0.0.1:3101/graphql"),
-  RAFIKI_TENANT_ID: z.string().default(""),
-  RAFIKI_API_SECRET: z.string().default(""),
-  RAFIKI_WALLET_ADDRESS_BASE: z.string().default("https://rafiki-backend:3000/accounts"),
-  RAFIKI_WEBHOOK_SECRET: z.string().default(""),
 
+  OP_HISTORY_WALLET_ADDRESS: z.string().default(""),
+  OP_HISTORY_KEY_ID: z.string().default(""),
+  OP_HISTORY_PRIVATE_KEY_PATH: z.string().default(""),
   OP_CLIENT_WALLET_ADDRESS: z.string().default(""),
   OP_KEY_ID: z.string().default(""),
   OP_PRIVATE_KEY_PATH: z.string().default(""),
@@ -61,14 +60,11 @@ const envSchema = z
    */
   OP_GRANT_INTERVAL: z.string().default(""),
 
-  SMS_PROVIDER: z.enum(["mock", "twilio"]).default("mock"),
+  SMS_PROVIDER: z.literal("mock").default("mock"),
   SMS_FROM: z.string().min(1).default("+570000000000"),
   SMS_WEBHOOK_SECRET: z.string().default("dev-webhook-secret"),
 
-  // Twilio (SMS_PROVIDER=twilio). TWILIO_WEBHOOK_URL is the public URL Twilio calls, byte for byte.
-  TWILIO_ACCOUNT_SID: z.string().default(""),
-  TWILIO_AUTH_TOKEN: z.string().default(""),
-  TWILIO_WEBHOOK_URL: z.string().default(""),
+
 })
   .superRefine((config, ctx) => {
     if (config.OP_GRANT_INTERVAL && !isValidGrantInterval(config.OP_GRANT_INTERVAL)) {
@@ -78,14 +74,6 @@ const envSchema = z
         message:
           "OP_GRANT_INTERVAL debe ser un intervalo ISO-8601 repetido (p. ej. R1/2026-10-16T00:00:00Z/P1Y)",
       });
-    }
-    if (config.PAYMENT_PROVIDER === "rafiki") {
-      if (config.RAFIKI_TEST_MODE !== "true") ctx.addIssue({ code: "custom", path: ["RAFIKI_TEST_MODE"], message: "Habilita explícitamente los fondos de prueba: RAFIKI_TEST_MODE=true" });
-      for (const key of ["RAFIKI_TENANT_ID", "RAFIKI_API_SECRET", "ENCRYPTION_KEY"] as const) {
-        if (!config[key]) ctx.addIssue({ code: "custom", path: [key], message: "Obligatorio para cuentas administradas" });
-      }
-      if (config.ADMIN_API_TOKEN.length < 24) ctx.addIssue({ code: "custom", path: ["ADMIN_API_TOKEN"], message: "Usa un token administrativo privado de al menos 24 caracteres" });
-      if (config.PAYMENT_CURRENCY !== "COP" || config.PAYMENT_ASSET_SCALE !== 0) ctx.addIssue({ code: "custom", path: ["PAYMENT_CURRENCY"], message: "Las cuentas administradas usan COP con escala 0" });
     }
     if (config.PAYMENT_PROVIDER === "openpayments") {
       for (const key of ["OP_CLIENT_WALLET_ADDRESS", "OP_KEY_ID"] as const) {
@@ -103,13 +91,6 @@ const envSchema = z
           path: ["OP_PRIVATE_KEY_PEM"],
           message: "Define OP_PRIVATE_KEY_PATH o OP_PRIVATE_KEY_PEM con PAYMENT_PROVIDER=openpayments",
         });
-      }
-    }
-    if (config.SMS_PROVIDER === "twilio") {
-      for (const key of ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_WEBHOOK_URL"] as const) {
-        if (!config[key]) {
-          ctx.addIssue({ code: "custom", path: [key], message: `${key} es obligatoria con SMS_PROVIDER=twilio` });
-        }
       }
     }
     if (config.DEMO_WALLET_ASSIGNMENT_ENABLED === "true") {

@@ -33,27 +33,18 @@ The repository uses the *Agent Workflow Kit* **locally** (`.opencode/`, `.agent-
 `scripts/harness/`, `docs/agent-workflow/`), all listed in `.gitignore`: each contributor installs
 their own.
 
-## Frontend y Rafiki local
+## Chasky: frontend y backend
 
-El frontend recuperado está en `frontend/`. Ejecuta `npm ci --prefix frontend` y
+El frontend vive en `frontend/`. Ejecuta `npm ci --prefix frontend` y
 `npm run dev:frontend`; abre http://localhost:3005. El backend usa el puerto 3000.
-Consulta [frontend/README.md](frontend/README.md) para el simulador de SMS.
+Consulta [frontend/README.md](frontend/README.md) para el login, dashboard y simulador.
 
-El modo opcional `PAYMENT_PROVIDER=rafiki` permite crear cuentas, consultar saldo y
-transferir COP por SMS con fondos ficticios. Utiliza la base PostgreSQL que ya configura
-`main`: conserva `DATABASE_URL` en `backend/.env`, ejecuta `npm run setup:rafiki`,
-`npm run rafiki:up`, `npm run db:migrate` y `npm run dev`.
-La migración `003_rafiki_accounts.sql` añade únicamente tablas de cuentas y movimientos
-Rafiki y la respuesta persistida de SMS. No incluye migración desde SQLite.
+El backend usa PostgreSQL y Open Payments. `PAYMENT_PROVIDER=openpayments` conecta
+con las billeteras de Interledger Test Wallet; `fake` permite pruebas locales sin red.
+Configura las credenciales del cliente y el activo de las billeteras en `backend/.env`.
+Consulta [backend/docs/test-wallet.md](backend/docs/test-wallet.md) para la conexión.
 
-El Compose ejecuta Rafiki con su PostgreSQL y Redis propios. No proporciona un servidor
-GNAP para billeteras de terceros: este modo administra cuentas de la misma instancia
-mediante su API administrativa. Los modos anteriores `fake` y `openpayments` se conservan.
-`npm run smoke:rafiki` comprueba una transferencia local con fondos ficticios, usando
-un esquema temporal en la base existente y creando billeteras de prueba en Rafiki.
-
-Twilio debe enviar POST a
-`https://sms-openpayments-production.up.railway.app/webhooks/sms`.
-Configura `TWILIO_WEBHOOK_URL` con esa misma URL y las credenciales de Twilio en Railway.
-Los eventos firmados de Rafiki se reciben por separado en `/webhooks/rafiki`.
-Los secretos de `backend/.env` no se incluyen en Git.
+El transporte SMS disponible es `SMS_PROVIDER=mock`: los mensajes se consultan en el
+buzón de desarrollo y no se envían a celulares reales. El webhook genérico
+`/webhooks/sms` y el simulador siguen disponibles para pruebas.
+Las credenciales privadas de `backend/.env` no se incluyen en Git.

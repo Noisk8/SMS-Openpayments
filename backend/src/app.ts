@@ -1,7 +1,5 @@
-import type { ManagedGateway } from "./managed/rafiki";
-import { registerManagedRoutes } from "./managed/routes";
-import { registerManagedWorker } from "./managed/worker";
-import formbody from "@fastify/formbody";
+import type { HistoryGateway } from "./customer/history-gateway";
+import { registerCustomerRoutes } from "./customer/routes";
 import Fastify, { type FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import type { AppConfig } from "./config";
@@ -19,13 +17,12 @@ import type { SmsProvider } from "./sms/types";
 
 export interface AppDeps {
   config: AppConfig;
+  historyGateway?: HistoryGateway;
   db: Db;
   /** SMS gateway provider (mock in local mode). */
   provider: SmsProvider;
   /** Payments provider (fake in local mode, Open Payments in production). */
   paymentProvider?: PaymentProvider;
-  managedGateway?: ManagedGateway;
-  runWorker?: boolean;
   /** Credential encryption box; null when ENCRYPTION_KEY is not configured. */
   secretBox: SecretBox | null;
 }
@@ -34,28 +31,22 @@ export interface AppDeps {
 export function buildApp(deps: AppDeps): FastifyInstance {
   const app = Fastify({ logger: deps.config.NODE_ENV !== "test" });
 
-  // Twilio sends webhooks as application/x-www-form-urlencoded.
-  app.register(formbody);
 
   app.get("/health", async () => {
     await deps.db.get("SELECT 1");
     return {
       status: "ok",
       smsProvider: deps.provider.name,
-      paymentProvider: deps.managedGateway ? "rafiki-managed-test" : deps.paymentProvider?.name,
+      paymentProvider: deps.paymentProvider?.name,
       currency: deps.config.PAYMENT_CURRENCY,
-      testFunds: Boolean(deps.managedGateway),
+      testFunds: deps.config.PAYMENT_PROVIDER === "fake" || deps.config.DEMO_WALLET_ASSIGNMENT_ENABLED === "true",
       time: new Date().toISOString(),
     };
   });
 
-  registerSmsRoutes(app, { config: deps.config, db: deps.db, provider: deps.provider, managed: Boolean(deps.managedGateway) });
+  registerCustomerRoutes(app, deps);
+  registerSmsRoutes(app, { config: deps.config, db: deps.db, provider: deps.provider });
 
-  if (deps.managedGateway) {
-    const managed = { config: deps.config, db: deps.db, gateway: deps.managedGateway };
-    registerManagedRoutes(app, managed);
-    if (deps.runWorker !== false) registerManagedWorker(app, managed, deps.provider);
-  }
   if (deps.paymentProvider) {
     const paymentsDeps = {
       config: deps.config,

@@ -1,4 +1,3 @@
-import { RafikiAdminGateway } from "./managed/rafiki";
 import { buildApp } from "./app";
 import { loadConfig } from "./config";
 import { createDatabase } from "./db";
@@ -18,24 +17,22 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const db = await createDatabase(config.DATABASE_URL);
   const provider = createSmsProvider(config);
-  const managedGateway = config.PAYMENT_PROVIDER === "rafiki" ? new RafikiAdminGateway(config) : undefined;
-  const paymentProvider = managedGateway ? undefined : createPaymentProvider(config);
+  const paymentProvider = createPaymentProvider(config);
   const secretBox = config.ENCRYPTION_KEY ? new SecretBox(config.ENCRYPTION_KEY) : null;
 
   if (!secretBox && config.PAYMENT_PROVIDER === "openpayments") {
     throw new Error("ENCRYPTION_KEY is required to persist Open Payments credentials.");
   }
 
-  const app = buildApp({ config, db, provider, paymentProvider, secretBox, ...(managedGateway ? { managedGateway } : {}) });
+  const app = buildApp({ config, db, provider, paymentProvider, secretBox });
 
-  if (managedGateway) {
+  if (config.JOB_WORKER_ENABLED === "false") {
     await app.listen({ port: config.PORT, host: "0.0.0.0" });
     const shutdown = async () => { await app.close(); await db.close(); process.exit(0); };
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
     return;
   }
-  if (!paymentProvider) throw new Error("Payment provider not configured");
 
   const processor = new JobProcessor({ db });
   registerJobHandlers(processor, {

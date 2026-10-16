@@ -59,7 +59,6 @@ describe("demo wallet pool", () => {
       provider: sms,
       paymentProvider: provider,
       secretBox,
-      runWorker: false,
     });
   }
 
@@ -361,7 +360,6 @@ describe("demo wallet pool", () => {
       provider: testProvider(config),
       paymentProvider: processingProvider,
       secretBox,
-      runWorker: false,
     });
     // A large retry delay keeps the bounded retries apart inside the test.
     const processingProcessor = new JobProcessor({ db, now: () => new Date(clockMs), retryDelayMs: 600_000 });
@@ -600,7 +598,6 @@ describe("demo wallet pool", () => {
       provider: testProvider(disabledConfig),
       paymentProvider: provider,
       secretBox: new SecretBox(disabledConfig.ENCRYPTION_KEY),
-      runWorker: false,
     });
     try {
       const res = await disabledApp.inject({

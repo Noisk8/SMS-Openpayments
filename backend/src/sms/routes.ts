@@ -10,7 +10,6 @@ import { getInboundSms, receiveInbound, sendOutboundSms } from "./service";
 import type { SmsProvider, WebhookRequest } from "./types";
 
 export interface SmsRouteDeps {
-  managed?: boolean;
   config: AppConfig;
   db: Db;
   provider: SmsProvider;
@@ -29,10 +28,6 @@ export function registerSmsRoutes(app: FastifyInstance, deps: SmsRouteDeps): voi
       await receiveInbound(deps.db, deps.provider, webhookRequest);
       // A duplicate is acknowledged without repeating business effects (spec §5).
       const acknowledgment = deps.provider.acknowledge();
-      // TwiML must be served as XML; JSON acknowledgments keep Fastify's default content type.
-      if (typeof acknowledgment === "string") {
-        return reply.code(200).type("text/xml").send(acknowledgment);
-      }
       return reply.code(200).send(acknowledgment);
     } catch (error) {
       if (isAppError(error) && error.code === "UNAUTHORIZED") {
@@ -74,7 +69,6 @@ export function registerSmsRoutes(app: FastifyInstance, deps: SmsRouteDeps): voi
       return reply.send({ ok: true, duplicate: true });
     }
 
-    if (deps.managed) return reply.send({ ok: true, duplicate: false, queued: true });
 
     const inbound = await getInboundSms(deps.db, received.messageRowId);
     let reply_text: string | undefined;

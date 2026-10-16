@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "SMS Pagos",
+  title: "Chasky",
   description: "Crea cuenta, envía dinero y consulta tu saldo por SMS.",
 };
 
@@ -13,11 +13,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="es">
       <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
         <header className="border-b border-slate-200 bg-white">
-          <nav className="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <nav className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3">
             <Link href="/" className="font-semibold">
-              SMS Pagos
+              Chasky
             </Link>
             <div className="flex flex-wrap gap-4 text-sm">
+              <Link href="/dashboard" className="font-semibold text-indigo-700">Mi Chasky</Link>
+              <Link href="/login" className="hover:underline">Ingresar</Link>
               <Link href="/accounts" className="hover:underline">Cuenta</Link>
               <Link href="/payments" className="hover:underline">Enviar dinero</Link>
               <Link href="/balance" className="hover:underline">Saldo</Link>
@@ -25,7 +27,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </nav>
         </header>
         <div className="flag-stripe h-1" aria-hidden="true" />
-        <main className="mx-auto max-w-3xl px-4 py-8">{children}</main>
+        <main className="mx-auto max-w-7xl px-4 py-8">{children}</main>
       </body>
     </html>
   );

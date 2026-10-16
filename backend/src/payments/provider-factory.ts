@@ -24,8 +24,6 @@ export function createPaymentProvider(config: AppConfig): PaymentProvider {
       });
     case "openpayments":
       return OpenPaymentsProvider.fromConfig(config);
-    case "rafiki":
-      throw new AppError("INTERNAL", "Rafiki administrado usa RafikiAdminGateway, no un proveedor de billetera externa.");
     default: {
       const exhaustive: never = config.PAYMENT_PROVIDER;
       throw new AppError("INTERNAL", `Unsupported payment provider: ${String(exhaustive)}`);

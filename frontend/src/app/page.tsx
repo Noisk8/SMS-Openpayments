@@ -597,7 +597,7 @@ export default function HomePage() {
 
         <footer className="border-t border-white/10 bg-night-950 py-8 text-slate-400">
           <div className={`${container} flex flex-col items-center justify-between gap-4 text-sm sm:flex-row`}>
-            <p className="font-medium text-slate-300">SMS Pagos · Pagos por SMS para Colombia</p>
+            <p className="font-medium text-slate-300">Chasky · Pagos por SMS para Colombia</p>
             <nav className="flex flex-wrap justify-center gap-5">
               <Link href="/accounts" className="transition hover:text-flag-yellow">
                 Cuenta

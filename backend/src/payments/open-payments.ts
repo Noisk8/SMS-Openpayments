@@ -89,11 +89,11 @@ export class OpenPaymentsProvider implements PaymentProvider {
 
   /** Construye el proveedor leyendo las credenciales de la configuración. */
   static fromConfig(config: AppConfig, overrides: Partial<OpenPaymentsProviderOptions> = {}): OpenPaymentsProvider {
-    const privateKey = loadPrivateKey(config);
     return new OpenPaymentsProvider({
       walletAddressUrl: config.OP_CLIENT_WALLET_ADDRESS,
       keyId: config.OP_KEY_ID,
-      privateKey,
+      // La lectura de la clave es necesaria al operar con el proveedor; no para el login.
+      get privateKey() { return loadPrivateKey(config); },
       ...overrides,
     });
   }
