@@ -9,18 +9,30 @@ const IV_BYTES = 12;
  * La clave vive fuera de la base y del repositorio (variable ENCRYPTION_KEY, 32 bytes base64).
  * Formato del payload: iv.tag.ciphertext (todo base64).
  */
+/**
+ * Accepts a 32-byte key as 64 hex characters or as base64 (openssl rand -base64 32).
+ */
+export function parseEncryptionKey(rawKey: string): Buffer {
+  if (!rawKey) {
+    throw new AppError("INTERNAL", "Falta ENCRYPTION_KEY para cifrar credenciales.");
+  }
+  const key = /^[0-9a-fA-F]{64}$/.test(rawKey)
+    ? Buffer.from(rawKey, "hex")
+    : Buffer.from(rawKey, "base64");
+  if (key.length !== 32) {
+    throw new AppError(
+      "INTERNAL",
+      "ENCRYPTION_KEY debe ser de 32 bytes: 64 caracteres hex o base64 (openssl rand -base64 32).",
+    );
+  }
+  return key;
+}
+
 export class SecretBox {
   private readonly key: Buffer;
 
-  constructor(base64Key: string) {
-    if (!base64Key) {
-      throw new AppError("INTERNAL", "Falta ENCRYPTION_KEY para cifrar credenciales.");
-    }
-    const key = Buffer.from(base64Key, "base64");
-    if (key.length !== 32) {
-      throw new AppError("INTERNAL", "ENCRYPTION_KEY debe ser de 32 bytes en base64 (openssl rand -base64 32).");
-    }
-    this.key = key;
+  constructor(rawKey: string) {
+    this.key = parseEncryptionKey(rawKey);
   }
 
   encrypt(plaintext: string): string {
