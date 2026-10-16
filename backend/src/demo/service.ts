@@ -5,6 +5,7 @@ import { isUniqueViolation } from "../db/errors";
 import type { Amount } from "../domain";
 import { AppError } from "../errors";
 import { enqueueJob } from "../jobs/repository";
+import { scheduleGrantTokenRotation } from "../jobs/rotation";
 import {
   getUserRow,
   normalizePhone,
@@ -647,14 +648,15 @@ async function ensureTreasuryAccessToken(
     limit,
     finishUri,
     nonce: randomUUID(),
+    ...(deps.config.OP_GRANT_INTERVAL ? { interval: deps.config.OP_GRANT_INTERVAL } : {}),
   });
   const now = nowIso();
   if (pending.kind === "granted") {
     await deps.db.run(
       `INSERT INTO grants
          (id, wallet_id, status, scopes, limit_value, limit_currency, limit_scale,
-          access_token_enc, expires_at, created_at, updated_at)
-       VALUES (?, ?, 'GRANTED', ?, ?, ?, ?, ?, ?, ?, ?)`,
+          access_token_enc, access_token_manage_uri, expires_at, created_at, updated_at)
+       VALUES (?, ?, 'GRANTED', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         grantId,
         treasuryWalletId,
@@ -663,11 +665,13 @@ async function ensureTreasuryAccessToken(
         limit.currency,
         limit.assetScale,
         deps.secretBox.encrypt(pending.accessToken),
+        pending.manageUri ?? null,
         pending.expiresAt,
         now,
         now,
       ],
     );
+    await scheduleGrantTokenRotation(deps.db, { grantId, expiresAt: pending.expiresAt });
     await recordAudit(deps.db, "demo.treasury.granted", "wallet", treasuryWalletId, { grantId });
     return { token: pending.accessToken, status: "AUTHORIZED" };
   }
