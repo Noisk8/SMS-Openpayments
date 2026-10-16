@@ -49,6 +49,12 @@ const envSchema = z
   OP_PRIVATE_KEY_PATH: z.string().default(""),
   /** Inline PEM of the signing key, for containers without a mounted file. */
   OP_PRIVATE_KEY_PEM: z.string().default(""),
+  /**
+   * Optional GNAP/ISO-8601 repeating interval for the outgoing-payment grant
+   * budget window, e.g. `R1/2026-10-16T00:00:00Z/P1Y`. When empty the grant is
+   * requested without `limits.interval`.
+   */
+  OP_GRANT_INTERVAL: z.string().default(""),
 
   SMS_PROVIDER: z.enum(["mock", "twilio"]).default("mock"),
   SMS_FROM: z.string().min(1).default("+570000000000"),
@@ -60,6 +66,14 @@ const envSchema = z
   TWILIO_WEBHOOK_URL: z.string().default(""),
 })
   .superRefine((config, ctx) => {
+    if (config.OP_GRANT_INTERVAL && !isValidGrantInterval(config.OP_GRANT_INTERVAL)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["OP_GRANT_INTERVAL"],
+        message:
+          "OP_GRANT_INTERVAL debe ser un intervalo ISO-8601 repetido (p. ej. R1/2026-10-16T00:00:00Z/P1Y)",
+      });
+    }
     if (config.PAYMENT_PROVIDER === "rafiki") {
       if (config.RAFIKI_TEST_MODE !== "true") ctx.addIssue({ code: "custom", path: ["RAFIKI_TEST_MODE"], message: "Habilita explícitamente los fondos de prueba: RAFIKI_TEST_MODE=true" });
       for (const key of ["RAFIKI_TENANT_ID", "RAFIKI_API_SECRET", "ENCRYPTION_KEY"] as const) {
@@ -110,6 +124,17 @@ const envSchema = z
   });
 
 export type AppConfig = z.infer<typeof envSchema>;
+
+/**
+ * Loosely validates a GNAP/ISO-8601 repeating interval such as
+ * `R1/2026-10-16T00:00:00Z/P1Y` (repetitions / start / period-or-end).
+ * The Authorization Server is the authority on the interval semantics; here we
+ * only reject clearly malformed input so a typo does not silently disable the
+ * budget window.
+ */
+export function isValidGrantInterval(value: string): boolean {
+  return /^R\d*\/[^/]+\/[^/]+$/.test(value);
+}
 
 let cached: AppConfig | undefined;
 

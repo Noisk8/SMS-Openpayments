@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { AppConfig } from "../config";
 import type { Amount, PaymentState } from "../domain";
 import type { Db } from "../db";
 import { isUniqueViolation } from "../db/errors";
@@ -30,6 +31,11 @@ import type {
 export interface PaymentServiceDeps {
   db: Db;
   provider: PaymentProvider;
+  /**
+   * Optional configuration used to apply the outgoing-grant interval
+   * (`OP_GRANT_INTERVAL`) when requesting an outgoing-payment grant.
+   */
+  config?: Pick<AppConfig, "OP_GRANT_INTERVAL">;
 }
 
 export interface PaymentSnapshot {
@@ -221,9 +227,16 @@ export async function preparePayment(
 /** Solicita el grant interactivo del outgoing-payment con el límite del quote. */
 export async function requestOutgoingAccess(
   deps: PaymentServiceDeps,
-  input: { wallet: WalletMetadata; limit: Amount; finishUri: string; nonce: string },
+  input: { wallet: WalletMetadata; limit: Amount; finishUri: string; nonce: string; interval?: string },
 ): Promise<PendingGrant | GrantedAccess> {
-  return deps.provider.requestOutgoingGrant(input);
+  const interval = input.interval ?? deps.config?.OP_GRANT_INTERVAL;
+  return deps.provider.requestOutgoingGrant({
+    wallet: input.wallet,
+    limit: input.limit,
+    finishUri: input.finishUri,
+    nonce: input.nonce,
+    ...(interval ? { interval } : {}),
+  });
 }
 
 /** Completa el grant interactivo tras la interacción del usuario. */

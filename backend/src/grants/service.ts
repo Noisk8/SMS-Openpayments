@@ -1,8 +1,10 @@
 import type { AppConfig } from "../config";
 import type { Db } from "../db";
 import { AppError } from "../errors";
+import { scheduleGrantTokenRotation } from "../jobs/rotation";
 import type { GrantBudgetUsage, PaymentProvider, WalletMetadata } from "../payments/types";
 import type { SecretBox } from "../security/encryption";
+import { isPast, isoPlusMs, nowIso } from "../util/time";
 import {
   getGrantRow,
   getWalletRow,
@@ -16,6 +18,19 @@ export interface GrantDeps {
   db: Db;
   provider: PaymentProvider;
   secretBox: SecretBox | null;
+}
+
+/** How long a rotation lock is held before it is considered abandoned. */
+export const ROTATION_LOCK_MS = 60_000;
+
+/** Outcome of a rotation attempt; `requiresReconsent` is the explicit dead-end state. */
+export interface RotateGrantTokenResult {
+  rotated: boolean;
+  /** True when the grant can no longer be rotated and needs a fresh consent. */
+  requiresReconsent: boolean;
+  expiresAt: string | null;
+  manageUri: string | null;
+  reason?: string;
 }
 
 function requireSecretBox(deps: GrantDeps): SecretBox {
@@ -72,22 +87,122 @@ export async function cancelGrant(deps: GrantDeps, grantId: string): Promise<Gra
 export async function rotateGrantToken(
   deps: GrantDeps,
   grantId: string,
-): Promise<{ rotated: boolean; expiresAt: string | null }> {
+): Promise<RotateGrantTokenResult> {
   const secretBox = requireSecretBox(deps);
   const { grant, wallet, accessToken } = await grantedContext(deps, grantId);
-  const rotated = await deps.provider.rotateAccessToken({ wallet, accessToken });
-  const now = new Date().toISOString();
-  if (!rotated) {
-    return { rotated: false, expiresAt: grant.expires_at };
+
+  // Already flagged: rotation cannot help, the user must consent again.
+  if (grant.requires_reconsent) {
+    return {
+      rotated: false,
+      requiresReconsent: true,
+      expiresAt: grant.expires_at,
+      manageUri: grant.access_token_manage_uri,
+      reason: "already_requires_reconsent",
+    };
   }
-  await deps.db.run(`UPDATE grants SET access_token_enc = ?, expires_at = ?, updated_at = ? WHERE id = ?`, [
-    secretBox.encrypt(rotated.accessToken),
-    rotated.expiresAt,
-    now,
-    grant.id,
-  ]);
-  await recordAudit(deps.db, "grant.token_rotated", "grant", grant.id, {});
-  return { rotated: true, expiresAt: rotated.expiresAt };
+
+  // Rotation only works while the current token is still valid. Once it expired
+  // the only way forward is a fresh consent; make that state explicit instead of
+  // calling the AS with a token it will reject.
+  if (grant.expires_at && isPast(grant.expires_at)) {
+    await markRequiresReconsent(deps, grant.id, "El access token expiró antes de poder rotarlo.");
+    return {
+      rotated: false,
+      requiresReconsent: true,
+      expiresAt: grant.expires_at,
+      manageUri: grant.access_token_manage_uri,
+      reason: "token_expired",
+    };
+  }
+
+  // Single-flight: only one rotation per grant may run at a time. The lock
+  // expires so an interrupted worker does not block rotation forever.
+  const now = nowIso();
+  const acquired = await deps.db.run(
+    `UPDATE grants SET rotation_lock_until = ?, updated_at = ?
+      WHERE id = ? AND status = 'GRANTED' AND requires_reconsent = 0
+        AND (rotation_lock_until IS NULL OR rotation_lock_until < ?)`,
+    [isoPlusMs(ROTATION_LOCK_MS), now, grant.id, now],
+  );
+  if (acquired.changes === 0) {
+    return {
+      rotated: false,
+      requiresReconsent: false,
+      expiresAt: grant.expires_at,
+      manageUri: grant.access_token_manage_uri,
+      reason: "rotation_in_progress",
+    };
+  }
+
+  try {
+    const rotated = await deps.provider.rotateAccessToken({
+      wallet,
+      accessToken,
+      ...(grant.access_token_manage_uri ? { manageUri: grant.access_token_manage_uri } : {}),
+    });
+    if (!rotated) {
+      await markRequiresReconsent(deps, grant.id, "La rotación fue rechazada por el proveedor.");
+      return {
+        rotated: false,
+        requiresReconsent: true,
+        expiresAt: grant.expires_at,
+        manageUri: grant.access_token_manage_uri,
+        reason: "rotation_rejected",
+      };
+    }
+    const done = nowIso();
+    await deps.db.run(
+      `UPDATE grants
+          SET access_token_enc = ?, expires_at = ?, access_token_manage_uri = ?,
+              requires_reconsent = 0, last_rotation_error = NULL, rotation_lock_until = NULL, updated_at = ?
+        WHERE id = ?`,
+      [secretBox.encrypt(rotated.accessToken), rotated.expiresAt, rotated.manageUri ?? null, done, grant.id],
+    );
+    await recordAudit(deps.db, "grant.token_rotated", "grant", grant.id, {});
+    // Keep the chain alive: schedule the next rotation before the new token expires.
+    await scheduleGrantTokenRotation(deps.db, { grantId: grant.id, expiresAt: rotated.expiresAt });
+    return {
+      rotated: true,
+      requiresReconsent: false,
+      expiresAt: rotated.expiresAt,
+      manageUri: rotated.manageUri ?? null,
+    };
+  } catch (error) {
+    if (isAuthorizationError(error)) {
+      // The AS no longer accepts the token: consent is required again.
+      await markRequiresReconsent(deps, grant.id, errorMessage(error));
+      return {
+        rotated: false,
+        requiresReconsent: true,
+        expiresAt: grant.expires_at,
+        manageUri: grant.access_token_manage_uri,
+        reason: "rotation_unauthorized",
+      };
+    }
+    // Transient failure: release the lock and let the caller retry with backoff.
+    await deps.db.run(`UPDATE grants SET rotation_lock_until = NULL WHERE id = ?`, [grant.id]);
+    throw error;
+  }
+}
+
+/** Marks the grant as needing a fresh consent and records why (never silent). */
+async function markRequiresReconsent(deps: GrantDeps, grantId: string, reason: string): Promise<void> {
+  await deps.db.run(
+    `UPDATE grants
+        SET requires_reconsent = 1, last_rotation_error = ?, rotation_lock_until = NULL, updated_at = ?
+      WHERE id = ?`,
+    [reason, nowIso(), grantId],
+  );
+  await recordAudit(deps.db, "grant.reconsent_required", "grant", grantId, {});
+}
+
+function isAuthorizationError(error: unknown): boolean {
+  return error instanceof AppError && (error.code === "UNAUTHORIZED" || error.code === "FORBIDDEN");
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 /** Invalidates the access token and marks the grant revoked (spec §7). */
@@ -105,7 +220,8 @@ async function transition(
 ): Promise<GrantRow> {
   const now = new Date().toISOString();
   await deps.db.run(
-    `UPDATE grants SET status = ?, access_token_enc = NULL, continue_token_enc = NULL, updated_at = ?
+    `UPDATE grants SET status = ?, access_token_enc = NULL, continue_token_enc = NULL,
+        access_token_manage_uri = NULL, rotation_lock_until = NULL, updated_at = ?
       WHERE id = ?`,
     [status, now, grantId],
   );

@@ -23,5 +23,7 @@ AI Policy. One file per topic/session.
 - [`2026-10-16-webhook-twilio.md`](2026-10-16-webhook-twilio.md) — SMS webhook and Twilio adapter.
 - [`2026-10-16-testwallet-open-payments.md`](2026-10-16-testwallet-open-payments.md) — Test Wallet
   configuration for the Open Payments model, preflight script and Twilio adapter.
+- [`2026-10-16-rotacion-grant.md`](2026-10-16-rotacion-grant.md) — access-token rotation and
+  interval-based grant limits (`OP_GRANT_INTERVAL`).
 
 Convention: `YYYY-MM-DD-topic.md`, with the prompt exactly as sent plus the relevant team answers.

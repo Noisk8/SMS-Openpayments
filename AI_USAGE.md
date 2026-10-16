@@ -129,3 +129,18 @@ Delegated implementation worker. All AI-built files for this feature are listed 
   quotes, a `purpose` label); they still need a human read-through before real use.
 - The team must review the treasury-grant handling and the reconciliation rules by hand.
 
+## Grant access-token rotation + interval limits (2026-10-16)
+
+OpenCode (agent; model **DeepSeek V4.1 Flash**) implemented, on branch
+`task/T-grant-rotation`, access-token rotation for Open Payments grants and
+interval-based grant limits. New/changed backend files, all AI-generated and
+pending human review: the migration `backend/src/db/migrations/005_grant_token_manage.sql`,
+`backend/src/jobs/rotation.ts`, and edits to `backend/src/payments/types.ts`,
+`backend/src/payments/open-payments.ts`, `backend/src/payments/service.ts`,
+`backend/src/payments/fake.ts`, `backend/src/grants/service.ts`,
+`backend/src/jobs/handlers.ts`, `backend/src/onboarding/service.ts`,
+`backend/src/sms/command-service.ts`, `backend/src/config.ts` and
+`backend/.env.example`. Tests: `backend/tests/grant-rotation.test.ts` (new) and
+`backend/tests/config.test.ts` (extended). No `frontend/**` file was touched and
+migrations 001/002 were left unchanged. Prompt recorded verbatim in
+[`prompts/2026-10-16-rotacion-grant.md`](prompts/2026-10-16-rotacion-grant.md).
