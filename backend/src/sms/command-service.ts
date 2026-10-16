@@ -212,6 +212,15 @@ async function handlePay(
     return { reply: `No existe un destinatario con el alias "${command.alias}".` };
   }
 
+  // One pending payment at a time keeps CONFIRMAR/CANCELAR unambiguous.
+  const pendingPayment = await pendingPayments(deps.db, user.id);
+  if (pendingPayment.length > 0) {
+    return {
+      reply:
+        "Ya tienes un pago pendiente de confirmación. Usa CONFIRMAR <codigo> o CANCELAR <codigo> antes de crear otro.",
+    };
+  }
+
   let payment;
   try {
     payment = await preparePayment(paymentDeps(deps), {
@@ -265,10 +274,15 @@ async function handleConfirm(deps: CommandServiceDeps, user: UserRow, code: stri
   if (candidates.length === 0) {
     return { reply: NOTHING_PENDING_REPLY };
   }
-  if (candidates.length > 1) {
-    return { reply: MULTIPLE_PENDING_REPLY };
+  // Match by the one-time code so several pending payments can still be resolved
+  // (previously any second pending payment blocked both CONFIRMAR and CANCELAR).
+  const payment =
+    candidates.length === 1
+      ? (candidates[0] as PaymentRow)
+      : candidates.find((p) => p.confirmation_hash && verifyConfirmationCode(code, p.confirmation_hash));
+  if (!payment) {
+    return { reply: "Código incorrecto o no corresponde a ningún pago pendiente." };
   }
-  const payment = candidates[0] as PaymentRow;
 
   if (!payment.confirmation_hash || !payment.confirmation_expires_at) {
     return { reply: "Ese pago no tiene un código de confirmación pendiente.", paymentId: payment.id };
@@ -342,12 +356,12 @@ async function handleCancel(deps: CommandServiceDeps, user: UserRow, code: strin
   if (candidates.length === 0) {
     return { reply: "No tienes pagos pendientes de cancelación." };
   }
-  if (candidates.length > 1) {
-    return { reply: MULTIPLE_PENDING_REPLY };
-  }
-  const payment = candidates[0] as PaymentRow;
-  if (!payment.confirmation_hash || !verifyConfirmationCode(code, payment.confirmation_hash)) {
-    return { reply: "Código incorrecto o pago no cancelable.", paymentId: payment.id, state: payment.state };
+  const payment =
+    candidates.length === 1
+      ? (candidates[0] as PaymentRow)
+      : candidates.find((p) => p.confirmation_hash && verifyConfirmationCode(code, p.confirmation_hash));
+  if (!payment || !payment.confirmation_hash || !verifyConfirmationCode(code, payment.confirmation_hash)) {
+    return { reply: "Código incorrecto o pago no cancelable." };
   }
 
   const result = await deps.db.run(
