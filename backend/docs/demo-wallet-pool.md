@@ -13,7 +13,7 @@ the backend.
 
 ## What it does
 
-1. **Import** a pool: one treasury wallet address plus nine customer wallet addresses. Each address
+1. **Import** a pool: one treasury wallet address plus one or more customer wallet addresses. Each address
    is validated with `walletAddress.get` (Open Payments discovery) and its currency, scale and
    service URLs are stored. Duplicates and wallets whose asset differs from the treasury are
    rejected. Re-importing is idempotent and never resets an existing assignment or funding.
@@ -47,7 +47,7 @@ All three use the existing admin authentication (`Authorization: Bearer <ADMIN_A
 { "treasury": "https://ilp.interledger-test.dev/treasury", "customers": ["https://.../c1", "... "] }
 ```
 
-The `customers` array must contain exactly nine addresses. Response:
+The `customers` array must contain at least one address. Response:
 
 ```json
 {
