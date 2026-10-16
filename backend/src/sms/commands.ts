@@ -1,6 +1,6 @@
 import type { AppConfig } from "../config";
 import type { Db } from "../db";
-import { HELP_TEXT, UNKNOWN_COMMAND_REPLY, parseCommand } from "./command-service";
+import { HELP_TEXT, SHORT_HELP_TEXT, UNKNOWN_COMMAND_REPLY, parseCommand } from "./command-service";
 import type { InboundSms, SmsProvider } from "./types";
 
 /** Dependencies available to the legacy synchronous entry (dev SMS simulator). */
@@ -11,7 +11,7 @@ export interface CommandContext {
 }
 
 export type { CommandOutcome } from "./command-service";
-export { HELP_TEXT };
+export { HELP_TEXT, SHORT_HELP_TEXT };
 
 const ASYNC_ONLY_REPLY =
   "Este comando se procesa en segundo plano. Recibirás la respuesta por SMS en unos segundos.";
@@ -28,7 +28,7 @@ const ASYNC_ONLY_REPLY =
 export function handleInboundCommand(_ctx: CommandContext, sms: InboundSms): { reply: string } {
   const parsed = parseCommand(sms.text);
   if (parsed.kind === "help") {
-    return { reply: HELP_TEXT };
+    return { reply: parsed.short ? SHORT_HELP_TEXT : HELP_TEXT };
   }
   if (parsed.kind === "unknown") {
     return { reply: UNKNOWN_COMMAND_REPLY };
