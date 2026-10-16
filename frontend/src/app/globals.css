@@ -115,6 +115,35 @@ body {
   background: linear-gradient(90deg, #fcd116 0 50%, #003893 50% 75%, #ce1126 75% 100%);
 }
 
+.chasky-hero-brand {
+  margin-top: 1.75rem;
+  font-size: clamp(4rem, 9vw, 7.5rem);
+  font-weight: 800;
+  letter-spacing: -0.06em;
+  line-height: 0.95;
+  color: #fff;
+}
+
+.chasky-hero-brand span {
+  color: var(--color-flag-yellow);
+  font-size: 0.45em;
+  vertical-align: super;
+  margin-left: 0.1em;
+}
+
+.chasky-hero-flag {
+  display: flex;
+  height: 6px;
+  width: min(22rem, 100%);
+  margin-top: 0.9rem;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.chasky-hero-flag-yellow { flex: 2; background: var(--color-flag-yellow); }
+.chasky-hero-flag-blue { flex: 1; background: #4d7cff; }
+.chasky-hero-flag-red { flex: 1; background: var(--color-flag-red); }
+
 .marquee-track {
   display: flex;
   width: max-content;

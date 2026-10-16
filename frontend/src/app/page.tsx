@@ -212,15 +212,22 @@ export default function HomePage() {
               </Reveal>
 
               <Reveal delay={90}>
+                <p className="chasky-hero-brand" aria-label="chasky">
+                  chasky<span aria-hidden="true">↗︎</span>
+                </p>
+                <span className="chasky-hero-flag" aria-hidden="true">
+                  <i className="chasky-hero-flag-yellow" />
+                  <i className="chasky-hero-flag-blue" />
+                  <i className="chasky-hero-flag-red" />
+                </span>
                 <h1 className="mt-6 text-4xl font-semibold leading-[1.05] tracking-tight sm:text-6xl">
-                  El pago que llega <span className="gradient-text">donde no llega internet</span>
+                  El pago que llega <span className="gradient-text">donde el internet no llega</span>
                 </h1>
               </Reveal>
 
               <Reveal delay={180}>
                 <p className="mt-6 max-w-xl text-base leading-relaxed text-slate-300 sm:text-lg">
-                  Crea tu cuenta con el celular, envía dinero y consulta tu saldo con un simple SMS. Sin apps,
-                  sin tarjetas y sin plan de datos.
+                  Pagos globales por SMS: Inclusión financiera sin internet, sin apps y sin barreras.
                 </p>
               </Reveal>
 
