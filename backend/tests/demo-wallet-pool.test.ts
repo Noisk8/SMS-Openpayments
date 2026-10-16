@@ -10,9 +10,12 @@ import { JobProcessor } from "../src/jobs/processor";
 import { FakePaymentProvider } from "../src/payments/fake";
 import type { WalletMetadata } from "../src/payments/types";
 import { SecretBox, generateEncryptionKey } from "../src/security/encryption";
+import { runCommand } from "../src/sms/command-service";
+import { nowIso } from "../src/util/time";
 import { testConfig, testDb, testProvider } from "./helpers";
 
 const TREASURY = "https://test.example/treasury";
+const EXTERNAL = "https://test.example/external";
 
 const customerAddresses = (count: number): string[] =>
   Array.from({ length: count }, (_, index) => `https://test.example/customer-${index + 1}`);
@@ -45,6 +48,7 @@ describe("demo wallet pool", () => {
     for (const address of customerAddresses(9)) {
       provider.registerWallet(walletMetadata(address), { balance: cop("0"), grantLimit: cop("0") });
     }
+    provider.registerWallet(walletMetadata(EXTERNAL), { balance: cop("0"), grantLimit: cop("0") });
   }
 
   function buildTestApp(): FastifyInstance {
@@ -59,12 +63,19 @@ describe("demo wallet pool", () => {
     });
   }
 
-  async function importPool(addresses = customerAddresses(9)): Promise<{ statusCode: number; json: any }> {
+  async function importPool(
+    addresses = customerAddresses(9),
+    externalRecipient?: string,
+  ): Promise<{ statusCode: number; json: any }> {
     const res = await app.inject({
       method: "POST",
       url: "/admin/demo/wallet-pool/import",
       headers: adminHeaders(),
-      payload: { treasury: TREASURY, customers: addresses },
+      payload: {
+        treasury: TREASURY,
+        customers: addresses,
+        ...(externalRecipient ? { externalRecipient } : {}),
+      },
     });
     return { statusCode: res.statusCode, json: res.json() };
   }
@@ -473,6 +484,109 @@ describe("demo wallet pool", () => {
     expect(demo.statusCode).toBe(201);
     expect(demo.json.demo.customerId).toBe(created.json().user.id);
     expect(await countRows("SELECT COUNT(*) AS n FROM users WHERE id <> 'demo-treasury-user'")).toBe(1);
+  });
+
+  it("importa el destinatario externo sin asignarlo nunca y la reimportación es idempotente", async () => {
+    const first = await importPool(customerAddresses(9), EXTERNAL);
+    expect(first.statusCode).toBe(200);
+    expect(first.json.externalRecipient).toMatchObject({ walletAddress: EXTERNAL, created: true });
+    expect(await countRows("SELECT COUNT(*) AS n FROM demo_wallet_pool WHERE role = 'EXTERNAL_RECIPIENT'")).toBe(1);
+
+    // Every customer is served from the CUSTOMER role: the external one is never handed out.
+    for (let index = 0; index < 9; index += 1) {
+      const res = await registerDemo(`30040000${String(index).padStart(2, "0")}`);
+      expect(res.statusCode).toBe(201);
+      expect(res.json.demo.walletAddress).not.toBe(EXTERNAL);
+    }
+    const externalRow = await db.get<{ allocation_status: string; assigned_user_id: string | null }>(
+      "SELECT allocation_status, assigned_user_id FROM demo_wallet_pool WHERE role = 'EXTERNAL_RECIPIENT'",
+    );
+    expect(externalRow?.allocation_status).toBe("AVAILABLE");
+    expect(externalRow?.assigned_user_id).toBeNull();
+
+    const second = await importPool(customerAddresses(9), EXTERNAL);
+    expect(second.statusCode).toBe(200);
+    expect(second.json.externalRecipient).toMatchObject({ walletAddress: EXTERNAL, created: false });
+    expect(await countRows("SELECT COUNT(*) AS n FROM demo_wallet_pool WHERE role = 'EXTERNAL_RECIPIENT'")).toBe(1);
+  });
+
+  it("rechaza el destinatario externo duplicado o con rol en conflicto", async () => {
+    const asTreasury = await importPool(customerAddresses(9), TREASURY);
+    expect(asTreasury.statusCode).toBe(400);
+
+    const alsoCustomer = await importPool([EXTERNAL, ...customerAddresses(8)], EXTERNAL);
+    expect(alsoCustomer.statusCode).toBe(400);
+
+    const ok = await importPool(customerAddresses(9), EXTERNAL);
+    expect(ok.statusCode).toBe(200);
+
+    // The same address re-imported as a customer is a role conflict.
+    const roleConflict = await importPool([EXTERNAL, ...customerAddresses(8)]);
+    expect(roleConflict.statusCode).toBe(409);
+    expect(roleConflict.json.error).toBe("CONFLICT");
+
+    // A different external address cannot replace the existing one.
+    const other = "https://test.example/other-external";
+    provider.registerWallet(walletMetadata(other));
+    const different = await importPool(customerAddresses(9), other);
+    expect(different.statusCode).toBe(409);
+    expect(different.json.error).toBe("CONFLICT");
+  });
+
+  it("el cliente asignado paga al destinatario externo por el flujo de comandos SMS", async () => {
+    expect((await importPool(customerAddresses(9), EXTERNAL)).statusCode).toBe(200);
+
+    const registration = await registerDemo("3005550001");
+    expect(registration.statusCode).toBe(201);
+    expect(registration.json.demo.externalAlias).toBe("EXTERNAL");
+    const customerId = registration.json.demo.customerId as string;
+    const walletAddress = registration.json.demo.walletAddress as string;
+
+    // The external recipient was pre-registered once for the customer...
+    const recipient = await db.get<{ wallet_address: string }>(
+      "SELECT wallet_address FROM recipients WHERE user_id = ? AND alias = 'EXTERNAL'",
+      [customerId],
+    );
+    expect(recipient?.wallet_address).toBe(EXTERNAL);
+    // ...and repeating the registration never duplicates it.
+    expect((await registerDemo("3005550001")).statusCode).toBe(200);
+    expect(await countRows("SELECT COUNT(*) AS n FROM recipients WHERE user_id = ?", [customerId])).toBe(1);
+
+    // The customer is verified and funded, then pays the alias through the command service.
+    await db.run("UPDATE users SET phone_verified_at = ?, status = 'active' WHERE id = ?", [nowIso(), customerId]);
+    provider.setWalletBalance(walletAddress, cop("100000"));
+
+    const sms = testProvider(config);
+    const deps = { config, db, provider, sms, secretBox };
+    const from = registration.json.user.phone as string;
+
+    const pay = await runCommand(deps, {
+      provider: sms.name,
+      messageId: "pay-external-1",
+      from,
+      to: config.SMS_FROM,
+      text: "PAGAR 5000 COP A EXTERNAL",
+      receivedAt: nowIso(),
+    });
+    expect(pay.state).toBe("AWAITING_CONFIRMATION");
+    expect(pay.reply).toContain(EXTERNAL);
+
+    const code = pay.reply.match(/CONFIRMAR\s+(\d{4})/)?.[1] as string;
+    expect(code).toMatch(/^\d{4}$/);
+    const confirm = await runCommand(deps, {
+      provider: sms.name,
+      messageId: "confirm-external-1",
+      from,
+      to: config.SMS_FROM,
+      text: `CONFIRMAR ${code}`,
+      receivedAt: nowIso(),
+    });
+    expect(confirm.state).toBe("COMPLETED");
+
+    const payment = await db.get<{ recipient_wallet_address: string; purpose: string }>(
+      "SELECT recipient_wallet_address, purpose FROM payments WHERE purpose = 'SMS'",
+    );
+    expect(payment?.recipient_wallet_address).toBe(EXTERNAL);
   });
 
   it("rechaza el modo demo cuando está deshabilitado", async () => {

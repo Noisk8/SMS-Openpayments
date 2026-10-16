@@ -20,11 +20,13 @@ import {
   type PaymentSnapshot,
 } from "../payments/service";
 import type { PaymentProvider, WalletMetadata } from "../payments/types";
+import { createRecipient, getRecipientByAlias } from "../recipients/service";
 import type { SecretBox } from "../security/encryption";
 import { isPast, isoPlusMs, nowIso } from "../util/time";
 import {
   getAssignmentById,
   getAssignmentByUserId,
+  getExternalRecipientWallet,
   getPoolWalletByAddress,
   getPoolWalletById,
   getTreasuryWallet,
@@ -96,11 +98,14 @@ export const isDemoFundingSettled = isFundingSettled;
 export interface ImportPoolInput {
   treasury: string;
   customers: string[];
+  /** Optional external payment destination, never assigned to a customer. */
+  externalRecipient?: string;
 }
 
 export interface ImportPoolResult {
   treasury: { walletAddress: string; currency: string; assetScale: number; created: boolean };
   customers: { imported: number; refreshed: number; total: number };
+  externalRecipient: { walletAddress: string; currency: string; assetScale: number; created: boolean } | null;
 }
 
 function poolInputFrom(
@@ -127,14 +132,16 @@ function poolInputFrom(
 }
 
 /**
- * Imports one treasury plus N customer wallets. Metadata is discovered through
- * `walletAddress.get`; duplicates and incompatible assets are rejected, and the
- * treasury never participates in customer assignment. Re-importing is idempotent:
- * existing rows keep their assignment and funding state.
+ * Imports one treasury plus N customer wallets and, optionally, a single
+ * external payment destination. Metadata is discovered through `walletAddress.get`;
+ * duplicates and incompatible assets are rejected, the treasury never participates
+ * in customer assignment, and the external recipient is never assignable either.
+ * Re-importing is idempotent: existing rows keep their assignment and funding state.
  */
 export async function importWalletPool(deps: DemoDeps, input: ImportPoolInput): Promise<ImportPoolResult> {
   const treasuryAddress = input.treasury.trim();
   const customerAddresses = input.customers.map((address) => address.trim());
+  const externalAddress = input.externalRecipient?.trim() ?? "";
 
   if (!treasuryAddress) {
     throw new AppError("VALIDATION_FAILED", "La wallet del treasury es obligatoria.");
@@ -147,6 +154,15 @@ export async function importWalletPool(deps: DemoDeps, input: ImportPoolInput): 
   }
   if (new Set(customerAddresses).size !== customerAddresses.length) {
     throw new AppError("VALIDATION_FAILED", "La lista de wallets de cliente contiene duplicados.");
+  }
+  if (externalAddress && externalAddress === treasuryAddress) {
+    throw new AppError("VALIDATION_FAILED", "El destinatario externo no puede ser el treasury.");
+  }
+  if (externalAddress && customerAddresses.includes(externalAddress)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "El destinatario externo no puede incluirse también como wallet de cliente.",
+    );
   }
 
   // Network discovery happens outside any transaction (spec §11).
@@ -163,11 +179,37 @@ export async function importWalletPool(deps: DemoDeps, input: ImportPoolInput): 
     }
     discovered.push(metadata);
   }
+  let externalMetadata: WalletMetadata | null = null;
+  if (externalAddress) {
+    externalMetadata = await deps.provider.getWalletMetadata(externalAddress);
+    if (!sameAsset(externalMetadata, treasuryMetadata)) {
+      throw new AppError(
+        "DEMO_WALLET_INCOMPATIBLE",
+        `El destinatario externo ${externalAddress} usa ${externalMetadata.currency}@${externalMetadata.assetScale}, incompatible con el treasury ${treasuryMetadata.currency}@${treasuryMetadata.assetScale}.`,
+        { walletAddress: externalAddress },
+      );
+    }
+  }
 
   const now = nowIso();
   return deps.db.transaction(async (tx) => {
     const treasury = await upsertPoolWallet(tx, poolInputFrom("TREASURY", treasuryMetadata, now));
     await ensureTreasuryIdentity(tx, treasury.row.wallet_address, treasuryMetadata, now);
+
+    // The external recipient is validated and stored like the others, but its role
+    // can never be reserved for a customer. The pool holds at most one: a different
+    // address is a conflict, the same address is an idempotent refresh.
+    let external: { row: PoolWalletRow; created: boolean } | null = null;
+    if (externalMetadata) {
+      const existingExternal = await getExternalRecipientWallet(tx);
+      if (existingExternal && existingExternal.wallet_address !== externalMetadata.walletAddress) {
+        throw new AppError(
+          "CONFLICT",
+          `Ya hay un destinatario externo importado (${existingExternal.wallet_address}).`,
+        );
+      }
+      external = await upsertPoolWallet(tx, poolInputFrom("EXTERNAL_RECIPIENT", externalMetadata, now));
+    }
 
     let imported = 0;
     let refreshed = 0;
@@ -182,6 +224,7 @@ export async function importWalletPool(deps: DemoDeps, input: ImportPoolInput): 
     await recordAudit(tx, "demo.pool.imported", "demo_wallet_pool", treasury.row.id, {
       customers: discovered.length,
       imported,
+      externalRecipient: externalMetadata?.walletAddress ?? null,
     });
 
     return {
@@ -192,6 +235,15 @@ export async function importWalletPool(deps: DemoDeps, input: ImportPoolInput): 
         created: treasury.created,
       },
       customers: { imported, refreshed, total: discovered.length },
+      externalRecipient:
+        external && externalMetadata
+          ? {
+              walletAddress: externalMetadata.walletAddress,
+              currency: externalMetadata.currency,
+              assetScale: externalMetadata.assetScale,
+              created: external.created,
+            }
+          : null,
     };
   });
 }
@@ -278,6 +330,8 @@ export interface DemoRegistrationResult {
   assignment: DemoAssignmentRow;
   createdUser: boolean;
   createdAssignment: boolean;
+  /** Alias under which the pool's external recipient was pre-registered, if any. */
+  externalAlias: string | null;
 }
 
 /** Stable onboarding idempotency key for a customer's single demo funding. */
@@ -302,7 +356,7 @@ export async function registerWithDemoWallet(
   }
   const phone = normalizePhone(input.phone);
 
-  return deps.db.transaction(async (tx) => {
+  const result = await deps.db.transaction(async (tx) => {
     let user = await tx.get<UserRow>("SELECT * FROM users WHERE phone = ?", [phone]);
     let createdUser = false;
     if (!user) {
@@ -381,6 +435,44 @@ export async function registerWithDemoWallet(
 
     return { user, assignment, createdUser, createdAssignment: true };
   });
+
+  // Pre-register the pool's external recipient after the assignment commits, so a
+  // discovery error never rolls back the reserved wallet. Repeating the
+  // registration returns the existing assignment and reuses the recipient.
+  const externalAlias = await ensureDemoExternalRecipient(deps, result.user.id);
+  return { ...result, externalAlias };
+}
+
+/**
+ * Registers the pool's optional external payment destination as a recipient of
+ * the given customer, under the configurable `DEMO_EXTERNAL_ALIAS`.
+ *
+ * Reuses the recipients service and is idempotent: an existing recipient with the
+ * same alias is returned untouched, and concurrent registrations never duplicate
+ * it. Returns the alias when the pool has an external recipient, otherwise null.
+ */
+export async function ensureDemoExternalRecipient(deps: DemoDeps, userId: string): Promise<string | null> {
+  const external = await getExternalRecipientWallet(deps.db);
+  if (!external) {
+    return null;
+  }
+  const alias = deps.config.DEMO_EXTERNAL_ALIAS;
+  if (await getRecipientByAlias(deps.db, userId, alias)) {
+    return alias;
+  }
+  try {
+    await createRecipient(deps, { userId, alias, walletAddress: external.wallet_address });
+  } catch (error) {
+    // A concurrent registration may have created it first; only then is the
+    // conflict benign, so re-check before rethrowing.
+    if (error instanceof AppError && error.code === "CONFLICT") {
+      if (await getRecipientByAlias(deps.db, userId, alias)) {
+        return alias;
+      }
+    }
+    throw error;
+  }
+  return alias;
 }
 
 // --- Top-up execution -------------------------------------------------------
@@ -796,6 +888,8 @@ function snapshot(assignment: DemoAssignmentRow): DemoTopUpOutcome {
 export interface DemoStatusResult {
   userId: string;
   assigned: boolean;
+  /** Alias the customer can pay to reach the pool's external recipient, if any. */
+  externalAlias: string | null;
   assignment: {
     id: string;
     walletAddress: string;
@@ -811,19 +905,23 @@ export interface DemoStatusResult {
 }
 
 /** Assignment + funding progress. Never exposes tokens or secrets. */
-export async function getDemoStatus(deps: Pick<DemoDeps, "db">, userId: string): Promise<DemoStatusResult> {
+export async function getDemoStatus(
+  deps: Pick<DemoDeps, "db" | "config">,
+  userId: string,
+): Promise<DemoStatusResult> {
   const user = await getUserRow(deps.db, userId);
   if (!user) {
     throw new AppError("NOT_FOUND", "Usuario no encontrado.");
   }
   const assignment = await getAssignmentByUserId(deps.db, userId);
   if (!assignment) {
-    return { userId, assigned: false, assignment: null };
+    return { userId, assigned: false, assignment: null, externalAlias: null };
   }
   const pool = await getPoolWalletById(deps.db, assignment.pool_wallet_id);
   return {
     userId,
     assigned: true,
+    externalAlias: await resolveExternalAlias(deps, userId),
     assignment: {
       id: assignment.id,
       walletAddress: assignment.wallet_address,
@@ -837,4 +935,16 @@ export async function getDemoStatus(deps: Pick<DemoDeps, "db">, userId: string):
       updatedAt: assignment.updated_at,
     },
   };
+}
+
+/** The external alias only exists for a customer that actually owns the recipient. */
+async function resolveExternalAlias(
+  deps: Pick<DemoDeps, "db" | "config">,
+  userId: string,
+): Promise<string | null> {
+  if (!(await getExternalRecipientWallet(deps.db))) {
+    return null;
+  }
+  const alias = deps.config.DEMO_EXTERNAL_ALIAS;
+  return (await getRecipientByAlias(deps.db, userId, alias)) ? alias : null;
 }

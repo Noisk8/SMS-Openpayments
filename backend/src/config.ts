@@ -36,6 +36,11 @@ const envSchema = z
     .string()
     .regex(/^\d+$/, "Debe ser un entero en unidades mínimas")
     .default("10000"),
+  /**
+   * Alias under which the pool's optional external recipient is pre-registered
+   * for each assigned customer, so they can pay it with `PAGAR <amount> A <alias>`.
+   */
+  DEMO_EXTERNAL_ALIAS: z.string().trim().min(1).max(64).default("EXTERNAL"),
 
   RAFIKI_TEST_MODE: z.enum(["true", "false"]).default("false"),
   RAFIKI_ADMIN_URL: z.string().default("http://127.0.0.1:3101/graphql"),

@@ -92,6 +92,7 @@ See [`prompts/`](prompts/):
 - [`prompts/2026-10-16-integracion-rafiki.md`](prompts/2026-10-16-integracion-rafiki.md)
 - [`prompts/2026-10-16-webhook-twilio.md`](prompts/2026-10-16-webhook-twilio.md)
 - [`prompts/2026-10-16-demo-wallet-pool.md`](prompts/2026-10-16-demo-wallet-pool.md)
+- [`prompts/2026-10-16-demo-external-recipient.md`](prompts/2026-10-16-demo-external-recipient.md)
 
 > Note: update this file whenever AI touches new code.
 
@@ -144,3 +145,25 @@ pending human review: the migration `backend/src/db/migrations/005_grant_token_m
 `backend/tests/config.test.ts` (extended). No `frontend/**` file was touched and
 migrations 001/002 were left unchanged. Prompt recorded verbatim in
 [`prompts/2026-10-16-rotacion-grant.md`](prompts/2026-10-16-rotacion-grant.md).
+
+## Demo external recipient (2026-10-16)
+
+OpenCode (agent; model **DeepSeek V4.1 Flash**), delegated implementation worker on branch
+`task/T-demo-recipient`, added the optional external payment destination to the demo wallet pool:
+a new `EXTERNAL_RECIPIENT` pool role that is never assignable, an optional `externalRecipient` on
+pool import, and the pre-registration of that destination as a customer recipient (under
+`DEMO_EXTERNAL_ALIAS`) so demo customers can pay it with the existing SMS `PAGAR` command. It reuses
+the pool repository, the recipients service and the payments/jobs flow; no parallel system was added.
+
+- AI-generated, pending human review: `backend/src/db/migrations/006_demo_external_recipient.sql`,
+  `backend/src/demo/repository.ts` and `backend/src/demo/service.ts` (role type, single-external
+  import validation, `ensureDemoExternalRecipient`), `backend/src/demo/routes.ts` (import schema),
+  `backend/src/onboarding/routes.ts` (exposes `externalAlias`), the `DEMO_EXTERNAL_ALIAS` addition in
+  `backend/src/config.ts`, and `backend/.env.example` / `backend/docs/demo-wallet-pool.md`.
+- Tests: `backend/tests/demo-wallet-pool.test.ts` extended with import/idempotency/role-conflict,
+  never-allocated and end-to-end `PAGAR … A EXTERNAL` cases.
+- Little or no AI: the money-moving Open Payments adapter and the existing pool/reservation logic
+  were not modified beyond the additive role handling.
+- No `frontend/**` file was touched and migrations `001`–`005` were left unchanged. Prompt recorded
+  verbatim in
+  [`prompts/2026-10-16-demo-external-recipient.md`](prompts/2026-10-16-demo-external-recipient.md).

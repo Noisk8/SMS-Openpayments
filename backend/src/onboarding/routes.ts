@@ -64,6 +64,7 @@ export function registerOnboardingRoutes(app: FastifyInstance, deps: OnboardingR
           registrationStatus: result.user.status,
           fundingStatus: result.assignment.funding_status,
           authorizationStatus: result.assignment.authorization_status,
+          externalAlias: result.externalAlias,
         },
       });
     }
