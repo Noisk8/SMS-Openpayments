@@ -229,10 +229,12 @@ export class OpenPaymentsProvider implements PaymentProvider {
   async createOutgoingPayment(input: CreateOutgoingPaymentInput): Promise<OutgoingPayment> {
     return this.withProviderErrors("createOutgoingPayment", async () => {
       const client = await this.client();
+      // The resource server (not the wallet address) hosts the outgoing-payments endpoint.
+      const wallet = await this.getWalletMetadata(input.walletAddress);
       const outgoing = await client.outgoingPayment.create(
-        { url: input.walletAddress, accessToken: input.accessToken },
+        { url: wallet.resourceServer, accessToken: input.accessToken },
         {
-          walletAddress: input.walletAddress,
+          walletAddress: wallet.walletAddress,
           quoteId: input.quoteId,
           metadata: { reference: input.reference },
         },
