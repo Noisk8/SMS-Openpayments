@@ -26,4 +26,27 @@ describe("config", () => {
   it("valida el rango de asset scale", () => {
     expect(() => loadConfig(base({ PAYMENT_ASSET_SCALE: "99" }))).toThrow();
   });
+
+  it("valida la configuración del top-up demo cuando está habilitado", () => {
+    const valid = loadConfig(
+      base({
+        DEMO_WALLET_ASSIGNMENT_ENABLED: "true",
+        DEMO_TOPUP_AMOUNT: "5000",
+        DEMO_TOPUP_MAX_AMOUNT: "10000",
+      }),
+    );
+    expect(valid.DEMO_TOPUP_AMOUNT).toBe("5000");
+    expect(valid.DEMO_TOPUP_CURRENCY).toBe("COP");
+    expect(valid.DEMO_TOPUP_ASSET_SCALE).toBe(0);
+
+    // The automatic top-up cannot exceed the configured ceiling.
+    expect(() =>
+      loadConfig(base({ DEMO_WALLET_ASSIGNMENT_ENABLED: "true", DEMO_TOPUP_AMOUNT: "20000", DEMO_TOPUP_MAX_AMOUNT: "10000" })),
+    ).toThrow();
+
+    // Zero funding is not a valid automatic top-up.
+    expect(() =>
+      loadConfig(base({ DEMO_WALLET_ASSIGNMENT_ENABLED: "true", DEMO_TOPUP_AMOUNT: "0" })),
+    ).toThrow();
+  });
 });

@@ -18,6 +18,25 @@ const envSchema = z
     .default("COP"),
   PAYMENT_ASSET_SCALE: z.coerce.number().int().min(0).max(12).default(0),
 
+  // Demo wallet pool: pre-created Open Payments wallets assigned at registration.
+  // Server-side only: never accepted from clients and never returned to them.
+  DEMO_WALLET_ASSIGNMENT_ENABLED: z.enum(["true", "false"]).default("false"),
+  /** Amount the customer must RECEIVE on the automatic initial top-up (minor units). */
+  DEMO_TOPUP_AMOUNT: z
+    .string()
+    .regex(/^\d+$/, "Debe ser un entero en unidades mínimas")
+    .default("1000"),
+  DEMO_TOPUP_CURRENCY: z
+    .string()
+    .regex(/^[A-Z]{3}$/, "Debe ser un código ISO 4217 de 3 letras")
+    .default("COP"),
+  DEMO_TOPUP_ASSET_SCALE: z.coerce.number().int().min(0).max(12).default(0),
+  /** Hard ceiling for automated funding: the treasury debit can never exceed it. */
+  DEMO_TOPUP_MAX_AMOUNT: z
+    .string()
+    .regex(/^\d+$/, "Debe ser un entero en unidades mínimas")
+    .default("10000"),
+
   RAFIKI_TEST_MODE: z.enum(["true", "false"]).default("false"),
   RAFIKI_ADMIN_URL: z.string().default("http://127.0.0.1:3101/graphql"),
   RAFIKI_TENANT_ID: z.string().default(""),
@@ -72,6 +91,20 @@ const envSchema = z
         if (!config[key]) {
           ctx.addIssue({ code: "custom", path: [key], message: `${key} es obligatoria con SMS_PROVIDER=twilio` });
         }
+      }
+    }
+    if (config.DEMO_WALLET_ASSIGNMENT_ENABLED === "true") {
+      const amount = BigInt(config.DEMO_TOPUP_AMOUNT);
+      const max = BigInt(config.DEMO_TOPUP_MAX_AMOUNT);
+      if (amount <= 0n) {
+        ctx.addIssue({ code: "custom", path: ["DEMO_TOPUP_AMOUNT"], message: "El top-up inicial debe ser mayor que cero" });
+      }
+      if (max <= 0n || amount > max) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["DEMO_TOPUP_MAX_AMOUNT"],
+          message: "DEMO_TOPUP_MAX_AMOUNT debe ser mayor o igual que DEMO_TOPUP_AMOUNT",
+        });
       }
     }
   });

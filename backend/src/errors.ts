@@ -14,6 +14,10 @@ export type ErrorCode =
   | "PAYMENT_NOT_CANCELLABLE"
   | "PROVIDER_ERROR"
   | "NEEDS_REVIEW"
+  | "DEMO_ASSIGNMENT_DISABLED"
+  | "DEMO_WALLET_POOL_EXHAUSTED"
+  | "DEMO_WALLET_ALREADY_ASSIGNED"
+  | "DEMO_WALLET_INCOMPATIBLE"
   | "INTERNAL";
 
 export class AppError extends Error {
@@ -42,12 +46,18 @@ export function httpStatusFor(code: ErrorCode): number {
       return 403;
     case "NOT_FOUND":
       return 404;
+    case "DEMO_ASSIGNMENT_DISABLED":
+      return 403;
     case "CONFLICT":
     case "DUPLICATE_MESSAGE":
     case "QUOTE_EXPIRED":
     case "CONFIRMATION_EXPIRED":
     case "PAYMENT_NOT_CANCELLABLE":
+    case "DEMO_WALLET_ALREADY_ASSIGNED":
+    case "DEMO_WALLET_INCOMPATIBLE":
       return 409;
+    case "DEMO_WALLET_POOL_EXHAUSTED":
+      return 503;
     case "INSUFFICIENT_GRANT_BUDGET":
     case "INSUFFICIENT_FUNDS":
       return 402;

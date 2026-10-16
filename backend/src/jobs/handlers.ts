@@ -1,5 +1,7 @@
 import type { AppConfig } from "../config";
 import type { Db } from "../db";
+import { getAssignmentById } from "../demo/repository";
+import { DEMO_TOPUP_JOB, isDemoFundingSettled, runDemoTopUp } from "../demo/service";
 import { isTerminal } from "../domain";
 import { reconcilePayment } from "../payments/reconciliation";
 import { getPayment } from "../payments/service";
@@ -35,6 +37,10 @@ interface ProcessInboundPayload {
 interface ReconcilePayload {
   paymentId?: string;
   accessToken?: string;
+}
+
+interface DemoTopUpPayload {
+  assignmentId?: string;
 }
 
 /** Parses a job payload defensively; malformed payloads yield an empty object. */
@@ -84,6 +90,19 @@ export function registerJobHandlers(processor: JobProcessor, deps: JobHandlerDep
     );
   });
 
+  // Demo onboarding funding: prepares and executes (or reconciles) the single
+  // automatic treasury top-up. Never re-sends a transfer blindly.
+  processor.register(DEMO_TOPUP_JOB, async (job) => {
+    const { assignmentId } = parsePayload<DemoTopUpPayload>(job.payload);
+    if (!assignmentId) {
+      return;
+    }
+    await runDemoTopUp(
+      { config: deps.config, db: deps.db, provider: deps.provider, secretBox: deps.secretBox },
+      { assignmentId },
+    );
+  });
+
   // --- Recovery inspectors (inspect, do not replay blindly) -----------------
 
   processor.registerRecovery("process_inbound_sms", async (job) => {
@@ -113,6 +132,19 @@ export function registerJobHandlers(processor: JobProcessor, deps: JobHandlerDep
     }
     // Reconciliation is read-only; only requeue while the outcome is still open.
     return isTerminal(payment.state) ? "complete" : "requeue";
+  });
+
+  processor.registerRecovery(DEMO_TOPUP_JOB, async (job) => {
+    const { assignmentId } = parsePayload<DemoTopUpPayload>(job.payload);
+    if (!assignmentId) {
+      return "complete";
+    }
+    const assignment = await getAssignmentById(deps.db, assignmentId);
+    if (!assignment) {
+      return "complete";
+    }
+    // Already settled: nothing to redo. Otherwise requeue to reconcile.
+    return isDemoFundingSettled(assignment.funding_status) ? "complete" : "requeue";
   });
 }
 

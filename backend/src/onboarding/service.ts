@@ -1,6 +1,6 @@
 import { randomBytes, randomInt, randomUUID, scryptSync, timingSafeEqual } from "node:crypto";
 import type { AppConfig } from "../config";
-import type { Db } from "../db";
+import type { Db, Queryable } from "../db";
 import { isUniqueViolation } from "../db/errors";
 import type { Amount, UserStatus } from "../domain";
 import { AppError } from "../errors";
@@ -87,7 +87,7 @@ export function rowToWalletMetadata(row: WalletRow): WalletMetadata {
 
 /** Records a state transition for audit purposes. Never store secrets here (spec §11). */
 export async function recordAudit(
-  db: Db,
+  db: Queryable,
   type: string,
   subjectType: string,
   subjectId: string,
