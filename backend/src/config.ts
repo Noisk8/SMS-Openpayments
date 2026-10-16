@@ -21,6 +21,8 @@ const envSchema = z
   OP_CLIENT_WALLET_ADDRESS: z.string().default(""),
   OP_KEY_ID: z.string().default(""),
   OP_PRIVATE_KEY_PATH: z.string().default(""),
+  /** Inline PEM of the signing key, for containers without a mounted file. */
+  OP_PRIVATE_KEY_PEM: z.string().default(""),
 
   SMS_PROVIDER: z.enum(["mock", "twilio"]).default("mock"),
   SMS_FROM: z.string().min(1).default("+570000000000"),
@@ -33,7 +35,7 @@ const envSchema = z
 })
   .superRefine((config, ctx) => {
     if (config.PAYMENT_PROVIDER === "openpayments") {
-      for (const key of ["OP_CLIENT_WALLET_ADDRESS", "OP_KEY_ID", "OP_PRIVATE_KEY_PATH"] as const) {
+      for (const key of ["OP_CLIENT_WALLET_ADDRESS", "OP_KEY_ID"] as const) {
         if (!config[key]) {
           ctx.addIssue({
             code: "custom",
@@ -41,6 +43,13 @@ const envSchema = z
             message: `${key} es obligatoria con PAYMENT_PROVIDER=openpayments`,
           });
         }
+      }
+      if (!config.OP_PRIVATE_KEY_PATH && !config.OP_PRIVATE_KEY_PEM) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["OP_PRIVATE_KEY_PEM"],
+          message: "Define OP_PRIVATE_KEY_PATH o OP_PRIVATE_KEY_PEM con PAYMENT_PROVIDER=openpayments",
+        });
       }
     }
     if (config.SMS_PROVIDER === "twilio") {

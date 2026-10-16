@@ -89,10 +89,7 @@ export class OpenPaymentsProvider implements PaymentProvider {
 
   /** Construye el proveedor leyendo las credenciales de la configuración. */
   static fromConfig(config: AppConfig, overrides: Partial<OpenPaymentsProviderOptions> = {}): OpenPaymentsProvider {
-    if (!config.OP_PRIVATE_KEY_PATH) {
-      throw new AppError("INTERNAL", "Falta OP_PRIVATE_KEY_PATH para el proveedor Open Payments.");
-    }
-    const privateKey = readFileSync(config.OP_PRIVATE_KEY_PATH, "utf8");
+    const privateKey = loadPrivateKey(config);
     return new OpenPaymentsProvider({
       walletAddressUrl: config.OP_CLIENT_WALLET_ADDRESS,
       keyId: config.OP_KEY_ID,
@@ -431,4 +428,21 @@ function mapClientError(operation: string, error: OpenPaymentsClientError): AppE
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Resolves the signing key: an inline PEM (containers) takes precedence over a file path.
+ * Environment variables often carry the PEM with escaped newlines.
+ */
+function loadPrivateKey(config: AppConfig): string {
+  if (config.OP_PRIVATE_KEY_PEM) {
+    return config.OP_PRIVATE_KEY_PEM.replace(/\\n/g, "\n");
+  }
+  if (config.OP_PRIVATE_KEY_PATH) {
+    return readFileSync(config.OP_PRIVATE_KEY_PATH, "utf8");
+  }
+  throw new AppError(
+    "INTERNAL",
+    "Falta OP_PRIVATE_KEY_PATH o OP_PRIVATE_KEY_PEM para el proveedor Open Payments.",
+  );
 }
