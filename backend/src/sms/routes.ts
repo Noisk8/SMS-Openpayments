@@ -10,6 +10,7 @@ import { getInboundSms, receiveInbound, sendOutboundSms } from "./service";
 import type { SmsProvider, WebhookRequest } from "./types";
 
 export interface SmsRouteDeps {
+  managed?: boolean;
   config: AppConfig;
   db: Db;
   provider: SmsProvider;
@@ -67,6 +68,8 @@ export function registerSmsRoutes(app: FastifyInstance, deps: SmsRouteDeps): voi
     if (received.duplicate) {
       return reply.send({ ok: true, duplicate: true });
     }
+
+    if (deps.managed) return reply.send({ ok: true, duplicate: false, queued: true });
 
     const inbound = await getInboundSms(deps.db, received.messageRowId);
     let reply_text: string | undefined;

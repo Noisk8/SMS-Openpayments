@@ -11,12 +11,19 @@ const envSchema = z
   ADMIN_API_TOKEN: z.string().min(1).default("dev-admin-token"),
   ENCRYPTION_KEY: z.string().default(""),
 
-  PAYMENT_PROVIDER: z.enum(["fake", "openpayments"]).default("fake"),
+  PAYMENT_PROVIDER: z.enum(["fake", "openpayments", "rafiki"]).default("fake"),
   PAYMENT_CURRENCY: z
     .string()
     .regex(/^[A-Z]{3}$/, "Debe ser un código ISO 4217 de 3 letras")
     .default("COP"),
   PAYMENT_ASSET_SCALE: z.coerce.number().int().min(0).max(12).default(0),
+
+  RAFIKI_TEST_MODE: z.enum(["true", "false"]).default("false"),
+  RAFIKI_ADMIN_URL: z.string().default("http://127.0.0.1:3101/graphql"),
+  RAFIKI_TENANT_ID: z.string().default(""),
+  RAFIKI_API_SECRET: z.string().default(""),
+  RAFIKI_WALLET_ADDRESS_BASE: z.string().default("https://rafiki-backend:3000/accounts"),
+  RAFIKI_WEBHOOK_SECRET: z.string().default(""),
 
   OP_CLIENT_WALLET_ADDRESS: z.string().default(""),
   OP_KEY_ID: z.string().default(""),
@@ -34,6 +41,14 @@ const envSchema = z
   TWILIO_WEBHOOK_URL: z.string().default(""),
 })
   .superRefine((config, ctx) => {
+    if (config.PAYMENT_PROVIDER === "rafiki") {
+      if (config.RAFIKI_TEST_MODE !== "true") ctx.addIssue({ code: "custom", path: ["RAFIKI_TEST_MODE"], message: "Habilita explícitamente los fondos de prueba: RAFIKI_TEST_MODE=true" });
+      for (const key of ["RAFIKI_TENANT_ID", "RAFIKI_API_SECRET", "ENCRYPTION_KEY"] as const) {
+        if (!config[key]) ctx.addIssue({ code: "custom", path: [key], message: "Obligatorio para cuentas administradas" });
+      }
+      if (config.ADMIN_API_TOKEN.length < 24) ctx.addIssue({ code: "custom", path: ["ADMIN_API_TOKEN"], message: "Usa un token administrativo privado de al menos 24 caracteres" });
+      if (config.PAYMENT_CURRENCY !== "COP" || config.PAYMENT_ASSET_SCALE !== 0) ctx.addIssue({ code: "custom", path: ["PAYMENT_CURRENCY"], message: "Las cuentas administradas usan COP con escala 0" });
+    }
     if (config.PAYMENT_PROVIDER === "openpayments") {
       for (const key of ["OP_CLIENT_WALLET_ADDRESS", "OP_KEY_ID"] as const) {
         if (!config[key]) {

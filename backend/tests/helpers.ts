@@ -5,6 +5,10 @@ import { MockSmsProvider } from "../src/sms/providers/mock";
 
 /** Domain tables truncated between tests (schema_migrations is preserved). */
 const DOMAIN_TABLES = [
+  "managed_entries",
+  "managed_journals",
+  "managed_transfers",
+  "managed_accounts",
   "users",
   "wallets",
   "recipients",

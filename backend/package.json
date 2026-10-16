@@ -15,7 +15,9 @@
     "test:watch": "vitest",
     "db:migrate": "tsx src/db/migrate.ts",
     "check:testwallet": "tsx scripts/check-test-wallet.ts",
-    "verify": "npm run typecheck && npm test"
+    "verify": "npm run typecheck && npm test",
+    "setup:rafiki": "tsx scripts/setup-rafiki.ts",
+    "smoke:rafiki": "tsx scripts/smoke-rafiki.ts"
   },
   "dependencies": {
     "@fastify/formbody": "^9.0.1",

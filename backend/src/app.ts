@@ -1,3 +1,6 @@
+import type { ManagedGateway } from "./managed/rafiki";
+import { registerManagedRoutes } from "./managed/routes";
+import { registerManagedWorker } from "./managed/worker";
 import formbody from "@fastify/formbody";
 import Fastify, { type FastifyInstance } from "fastify";
 import { ZodError } from "zod";
@@ -19,7 +22,9 @@ export interface AppDeps {
   /** SMS gateway provider (mock in local mode). */
   provider: SmsProvider;
   /** Payments provider (fake in local mode, Open Payments in production). */
-  paymentProvider: PaymentProvider;
+  paymentProvider?: PaymentProvider;
+  managedGateway?: ManagedGateway;
+  runWorker?: boolean;
   /** Credential encryption box; null when ENCRYPTION_KEY is not configured. */
   secretBox: SecretBox | null;
 }
@@ -36,25 +41,34 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     return {
       status: "ok",
       smsProvider: deps.provider.name,
-      paymentProvider: deps.paymentProvider.name,
+      paymentProvider: deps.managedGateway ? "rafiki-managed-test" : deps.paymentProvider?.name,
+      currency: deps.config.PAYMENT_CURRENCY,
+      testFunds: Boolean(deps.managedGateway),
       time: new Date().toISOString(),
     };
   });
 
-  registerSmsRoutes(app, { config: deps.config, db: deps.db, provider: deps.provider });
+  registerSmsRoutes(app, { config: deps.config, db: deps.db, provider: deps.provider, managed: Boolean(deps.managedGateway) });
 
-  const paymentsDeps = {
-    config: deps.config,
-    db: deps.db,
-    provider: deps.paymentProvider,
-    secretBox: deps.secretBox,
-  };
-  registerOnboardingRoutes(app, paymentsDeps);
-  registerRecipientRoutes(app, paymentsDeps);
-  registerGrantRoutes(app, paymentsDeps);
+  if (deps.managedGateway) {
+    const managed = { config: deps.config, db: deps.db, gateway: deps.managedGateway };
+    registerManagedRoutes(app, managed);
+    if (deps.runWorker !== false) registerManagedWorker(app, managed, deps.provider);
+  }
+  if (deps.paymentProvider) {
+    const paymentsDeps = {
+      config: deps.config,
+      db: deps.db,
+      provider: deps.paymentProvider,
+      secretBox: deps.secretBox,
+    };
+    registerOnboardingRoutes(app, paymentsDeps);
+    registerRecipientRoutes(app, paymentsDeps);
+    registerGrantRoutes(app, paymentsDeps);
 
-  if (deps.config.NODE_ENV !== "production") {
-    registerDevRoutes(app, { config: deps.config, paymentProvider: deps.paymentProvider });
+    if (deps.config.NODE_ENV !== "production") {
+      registerDevRoutes(app, { config: deps.config, paymentProvider: deps.paymentProvider });
+    }
   }
 
   app.setErrorHandler((error, request, reply) => {

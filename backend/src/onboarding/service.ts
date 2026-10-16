@@ -155,7 +155,7 @@ interface PhoneVerificationRow {
 
 // --- User registration ------------------------------------------------------
 
-export async function createUser(deps: OnboardingDeps, input: { phone: string }): Promise<UserRow> {
+export async function createUser(deps: Pick<OnboardingDeps, "db">, input: { phone: string }): Promise<UserRow> {
   const phone = normalizePhone(input.phone);
   const id = randomUUID();
   const now = nowIso();
@@ -182,7 +182,7 @@ export async function createUser(deps: OnboardingDeps, input: { phone: string })
  * the caller can deliver it out of band (SMS/dev peek). The code is never logged.
  */
 export async function requestPhoneVerification(
-  deps: OnboardingDeps,
+  deps: Pick<OnboardingDeps, "db">,
   userId: string,
 ): Promise<{ expiresAt: string; code: string }> {
   const user = await getUserRow(deps.db, userId);
@@ -207,7 +207,7 @@ export async function requestPhoneVerification(
 }
 
 /** Verifies the latest code and activates the user on success. */
-export async function verifyPhone(deps: OnboardingDeps, userId: string, code: string): Promise<UserRow> {
+export async function verifyPhone(deps: Pick<OnboardingDeps, "db">, userId: string, code: string): Promise<UserRow> {
   const user = await getUserRow(deps.db, userId);
   if (!user) {
     throw new AppError("NOT_FOUND", "Usuario no encontrado.");
