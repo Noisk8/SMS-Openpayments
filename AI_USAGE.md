@@ -93,3 +93,21 @@ See [`prompts/`](prompts/):
 - [`prompts/2026-10-16-webhook-twilio.md`](prompts/2026-10-16-webhook-twilio.md)
 
 > Note: update this file whenever AI touches new code.
+
+## Integración de frontend y Rafiki sobre main (2026-10-16)
+
+Se usó OpenAI Codex para recuperar y adaptar `frontend/`, integrar `backend/src/managed/`,
+la migración aditiva `003_rafiki_accounts.sql`, configuración, rutas, arranque, scripts,
+pruebas, Compose y documentación. Se conservan las implementaciones PostgreSQL y Open
+Payments de main; no se incluye el importador SQLite ni la migración local de base de datos.
+El frontend parte del diseño previo del equipo, con adaptaciones de IA para SMS y simulador.
+No se atribuyen archivos nuevos de esta integración como libres de IA; los módulos de
+base de datos existentes en main no se modificaron en esta intervención.
+Prompt real: [registro](prompts/2026-10-16-publicar-frontend-rafiki.md).
+
+### Corrección del check GitGuardian del PR #3
+
+Codex revisó el hallazgo de Generic Password y simplificó la referencia obligatoria a
+`RAFIKI_DB_PASSWORD` en `infra/rafiki/compose.yaml`. El valor sigue procediendo del
+entorno privado; el texto señalado era el mensaje de error de Compose, no una contraseña.
+Los demás archivos de aplicación no se modificaron en esta corrección.

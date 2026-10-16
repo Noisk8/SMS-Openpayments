@@ -1,6 +1,8 @@
 # dependencias y builds
 node_modules/
 dist/
+.next/
+out/
 coverage/
 *.tsbuildinfo
 
