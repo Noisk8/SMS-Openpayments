@@ -62,7 +62,7 @@ export class MockSmsProvider implements SmsProvider {
       at: nowIso(),
       ...(input.paymentId ? { paymentId: input.paymentId } : {}),
     });
-    return { status: "sent", providerMessageId: `mock-${this.outbox.length}` };
+    return { status: "sent", providerMessageId: `mock-${randomUUID()}` };
   }
 
   acknowledge(): unknown {
