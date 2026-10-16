@@ -50,7 +50,26 @@ tools were used, for what, and where in the project. The real prompts are stored
 - Files with AI-generated text in this step: `AI_USAGE.md` and `prompts/` (the index and the prompt
   logs). No application code changed.
 
+### 6. Test Wallet configuration and Twilio adapter (AI-generated code, human-reviewed)
+
+- `backend/src/payments/test-wallet-check.ts`, `backend/scripts/check-test-wallet.ts` and
+  `backend/tests/test-wallet-check.test.ts`: read-only preflight for a Test Wallet client key and
+  wallets. Generated with the agent; the team must review it before relying on it.
+- `backend/src/sms/providers/twilio.ts` and `backend/tests/twilio.test.ts`: Twilio adapter for the
+  `SmsProvider` interface, with signed-webhook tests. Ported from an earlier branch and adapted to the
+  current PostgreSQL code.
+- Edited to support them: `backend/src/config.ts`, `backend/src/app.ts` (form parsing),
+  `backend/src/sms/provider-factory.ts`, `backend/src/sms/routes.ts` (TwiML content type),
+  `backend/tsconfig.json`, `backend/package.json` and `backend/.env.example`.
+- Documentation written with the agent: `backend/docs/test-wallet.md`.
+- Not AI-generated: the Open Payments adapter (`backend/src/payments/open-payments.ts`), the payment
+  service and the database layer. These are the files the team reviews by hand.
+
 ## What we did ourselves
+
+- Chose the account model: the team's model (users' own wallets and grants), not a platform-managed
+  account model.
+- Pending: create the Test Wallet accounts and generate the client keys (manual, in the browser).
 
 - Defined the scope, the stack and the cuts.
 - Owned the Open Payments design decisions (grant budgets, confirmation model).
@@ -67,6 +86,7 @@ See [`prompts/`](prompts/):
 - [`prompts/2026-10-16-specs-backend.md`](prompts/2026-10-16-specs-backend.md)
 - [`prompts/2026-10-16-english-convention.md`](prompts/2026-10-16-english-convention.md)
 - [`prompts/2026-10-16-alcance-cop.md`](prompts/2026-10-16-alcance-cop.md)
+- [`prompts/2026-10-16-testwallet-open-payments.md`](prompts/2026-10-16-testwallet-open-payments.md)
 - [`prompts/2026-10-16-cuentas-sms-rafiki-propio.md`](prompts/2026-10-16-cuentas-sms-rafiki-propio.md)
 - [`prompts/2026-10-16-entorno-testnet.md`](prompts/2026-10-16-entorno-testnet.md)
 - [`prompts/2026-10-16-integracion-rafiki.md`](prompts/2026-10-16-integracion-rafiki.md)
