@@ -70,7 +70,7 @@ describe("webhook SMS", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it("el simulador dev responde a AYUDA", async () => {
+  it("el simulador dev responde a AYUDA con la ayuda corta", async () => {
     const res = await app.inject({
       method: "POST",
       url: "/dev/sms/simulate",
@@ -78,6 +78,7 @@ describe("webhook SMS", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ ok: true, duplicate: false });
-    expect(String(res.json().reply)).toContain("Comandos");
+    expect(String(res.json().reply)).toContain("P 1000 ANA: pagar");
+    expect(String(res.json().reply)).toContain("9: ayuda");
   });
 });

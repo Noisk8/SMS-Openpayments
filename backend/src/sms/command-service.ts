@@ -23,8 +23,8 @@ import {
 } from "../onboarding/service";
 import {
   getRecipientByAlias,
-  getRecipientByDestination,
   listRecipients,
+  type RecipientRow,
 } from "../recipients/service";
 import type { SecretBox } from "../security/encryption";
 import { isPast, isoPlusSeconds, nowIso } from "../util/time";
@@ -35,10 +35,13 @@ import type { InboundSms, SmsProvider } from "./types";
  *
  * Authenticates the sender by phone and runs one of two command families:
  *
- * - the MVP short interface (`P <amount> <destination>`, a bare confirmation
- *   code, `0` cancel, `1` last payment, `2` destinations, `9` help), and
+ * - the MVP short interface (`P <amount> <alias>`, a bare confirmation code,
+ *   `0` cancel, `1` last payment, `9` help), and
  * - the original long commands (`PAGAR`, `CONFIRMAR`, `CANCELAR`, `ESTADO`,
  *   `AYUDA`), kept as compatible alternatives.
+ *
+ * Destinations are always addressed by alias: the SMS interface never shows,
+ * accepts or requires a recipient number.
  *
  * Both families share the same rules: one pending payment per user, a 4-digit
  * code that expires after {@link CONFIRMATION_TTL_SECONDS} and allows at most
@@ -71,21 +74,16 @@ export const CONFIRMATION_MAX_ATTEMPTS = 5;
 /** MVP ceiling for a short-form amount, in major units of the wallet asset. */
 export const MVP_MAX_AMOUNT_MAJOR = 1_000_000;
 
-export const HELP_TEXT = [
-  "Comandos disponibles:",
-  "PAGAR <monto> [MONEDA] A <alias>",
-  "CONFIRMAR <codigo>",
-  "CANCELAR <codigo>",
-  "ESTADO <referencia>",
-  "AYUDA",
-].join("\n");
-
+/**
+ * Single help text, shared by every help command (`9`, `AYUDA` and `HELP`).
+ * Destinations are addressed by alias, so the help never advertises a numbered
+ * destination list.
+ */
 export const SHORT_HELP_TEXT = [
-  "P 1000 2: pagar",
+  "P 1000 ANA: pagar",
   "Codigo recibido: confirmar",
   "0: cancelar",
   "1: ultimo pago",
-  "2: destinos",
   "9: ayuda",
 ].join("\n");
 
@@ -106,27 +104,25 @@ const AUTHORIZATION_REQUIRED_REPLY =
 
 // --- Short replies (MVP) ----------------------------------------------------
 
-const FORMAT_REPLY = "Formato: P 1000 2. Envia 2 para ver destinos.";
-const DESTINATION_NOT_FOUND_REPLY = "Destino no encontrado. Envia 2 para ver destinos.";
+const FORMAT_REPLY = "Formato: P 1000 ANA. 9 para ayuda.";
+const DESTINATION_NOT_FOUND_REPLY = "Destino no encontrado. 9 para ayuda.";
 const ONE_PENDING_REPLY = "Ya tienes un pago pendiente. Usa su codigo o envia 0 para cancelar.";
 const NO_PENDING_SHORT_REPLY = "No tienes un pago pendiente. 9 para ayuda.";
 const EXPIRED_SHORT_REPLY = "El pago vencio. Crea otro con P monto destino.";
 const CANCELLED_SHORT_REPLY = "Pago cancelado. No se envio dinero.";
 const ATTEMPTS_EXHAUSTED_SHORT_REPLY = "Demasiados intentos. Envia 0 para cancelar.";
 const UNCERTAIN_SHORT_REPLY = "Pago en revision. No repitas el envio. 1 para consultar.";
-const NO_DESTINATIONS_REPLY = "No tienes destinos. 9 para ayuda.";
 const NO_PAYMENTS_SHORT_REPLY = "No tienes pagos. 9 para ayuda.";
 
 // --- Command parsing --------------------------------------------------------
 
 export type ParsedCommand =
-  | { kind: "help"; short: boolean }
+  | { kind: "help" }
   | { kind: "unknown" }
   | { kind: "pay"; amount: string; currency?: string; destination: string; short: boolean }
   | { kind: "confirm"; code: string; short: boolean }
   | { kind: "cancel"; code?: string; short: boolean }
-  | { kind: "status"; reference?: string; short: boolean }
-  | { kind: "recipients" };
+  | { kind: "status"; reference?: string; short: boolean };
 
 /** Parses an inbound SMS into a command. Pure and dependency-free. */
 export function parseCommand(text: string): ParsedCommand {
@@ -134,18 +130,17 @@ export function parseCommand(text: string): ParsedCommand {
   const first = tokens[0] ?? "";
   const verb = first.toUpperCase();
 
-  // Single-token commands. Recipient numbers are only meaningful after `P`, so a
-  // lone number is always a command: `0`/`1`/`2`/`9` or a confirmation code.
+  // Single-token commands. Destinations are resolved by alias inside `P`, so a
+  // lone number is always a command: `0`/`1`/`9` or a confirmation code. `2` is
+  // not a command any more: the SMS never lists destinations.
   if (tokens.length === 1 && /^\d+$/.test(first)) {
     switch (first) {
       case "0":
         return { kind: "cancel", short: true };
       case "1":
         return { kind: "status", short: true };
-      case "2":
-        return { kind: "recipients" };
       case "9":
-        return { kind: "help", short: true };
+        return { kind: "help" };
     }
     // Exactly a code (4 digits, or longer if the per-user space ever grows).
     if (first.length >= 4) {
@@ -155,13 +150,13 @@ export function parseCommand(text: string): ParsedCommand {
   }
 
   if (tokens.length === 1 && (verb === "AYUDA" || verb === "HELP")) {
-    return { kind: "help", short: false };
+    return { kind: "help" };
   }
 
   switch (verb) {
     case "AYUDA":
     case "HELP":
-      return { kind: "help", short: false };
+      return { kind: "help" };
     case "P":
       return parseShortPay(tokens);
     case "PAGAR":
@@ -183,7 +178,7 @@ export function parseCommand(text: string): ParsedCommand {
   }
 }
 
-/** `P <amount> <destination>` → the amount and a number or alias destination. */
+/** `P <amount> <alias>` → the amount and the alias destination. */
 function parseShortPay(tokens: string[]): ParsedCommand {
   const amount = tokens[1] ?? "";
   const destination = tokens.slice(2).join(" ");
@@ -213,7 +208,7 @@ function parsePay(tokens: string[]): ParsedCommand {
 export async function runCommand(deps: CommandServiceDeps, sms: InboundSms): Promise<CommandOutcome> {
   const parsed = parseCommand(sms.text);
   if (parsed.kind === "help") {
-    return { reply: parsed.short ? SHORT_HELP_TEXT : HELP_TEXT };
+    return { reply: SHORT_HELP_TEXT };
   }
   if (parsed.kind === "unknown") {
     return { reply: UNKNOWN_COMMAND_REPLY };
@@ -234,8 +229,6 @@ export async function runCommand(deps: CommandServiceDeps, sms: InboundSms): Pro
       return parsed.short ? handleShortCancel(deps, user) : handleLongCancel(deps, user, parsed.code as string);
     case "status":
       return parsed.short ? handleShortStatus(deps, user) : handleLongStatus(deps, user, parsed.reference as string);
-    case "recipients":
-      return handleRecipients(deps, user);
   }
 }
 
@@ -299,9 +292,9 @@ async function handlePay(
   }
   const debitAmount: Amount = { value, currency: wallet.currency, assetScale: wallet.asset_scale };
 
-  const recipient = command.short
-    ? await getRecipientByDestination(deps.db, user.id, command.destination)
-    : await getRecipientByAlias(deps.db, user.id, command.destination);
+  // Both families resolve the destination by alias only; the SMS interface never
+  // accepts a recipient number.
+  const recipient = await resolveRecipientByAlias(deps.db, user.id, command.destination);
   if (!recipient) {
     return {
       reply: command.short
@@ -669,19 +662,37 @@ function describeState(state: PaymentState): string {
   }
 }
 
-// --- Destinations (2) -------------------------------------------------------
+// --- Destination resolution -------------------------------------------------
 
-async function handleRecipients(deps: CommandServiceDeps, user: UserRow): Promise<CommandOutcome> {
-  const recipients = await listRecipients(deps.db, user.id);
-  if (recipients.length === 0) {
-    return { reply: NO_DESTINATIONS_REPLY };
+/**
+ * Resolves an SMS destination to one of the user's recipients **by alias only**.
+ *
+ * Matching folds case, trims the edges and ignores inner whitespace, so
+ * `tiendarutan` and `Tienda Ruta N` reach the same recipient. A numeric token is
+ * just an alias that happens to be a number: it never resolves a recipient's
+ * `number`, which the SMS interface no longer exposes.
+ */
+async function resolveRecipientByAlias(
+  db: Db,
+  userId: string,
+  raw: string,
+): Promise<RecipientRow | undefined> {
+  const alias = raw.trim();
+  if (alias.length === 0) {
+    return undefined;
   }
-  const lines = [
-    "Destinos:",
-    ...recipients.map((recipient) => `${recipient.number} ${recipient.alias}`),
-    "Para pagar: P 1000 2",
-  ];
-  return { reply: lines.join("\n") };
+  const exact = await getRecipientByAlias(db, userId, alias);
+  if (exact) {
+    return exact;
+  }
+  const key = foldAlias(alias);
+  const recipients = await listRecipients(db, userId);
+  return recipients.find((recipient) => foldAlias(recipient.alias) === key);
+}
+
+/** Case- and whitespace-insensitive alias key for SMS matching. */
+function foldAlias(alias: string): string {
+  return alias.toLowerCase().replace(/\s+/g, "");
 }
 
 // --- Confirmation codes -----------------------------------------------------

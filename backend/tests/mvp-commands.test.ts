@@ -72,7 +72,7 @@ describe("SMS MVP short commands", () => {
       [senderWallet.walletAddress, senderWallet.authServer, senderWallet.resourceServer],
     );
     provider.registerWallet(senderWallet, { balance: cop("1000000"), grantLimit: cop("1000000") });
-    // Numbered in creation order: 1 Ana, 2 Tienda Ruta N, 3 Juan.
+    // The alias is the only destination the SMS interface exposes.
     await addRecipient("Ana", "https://wallet.example/ana");
     await addRecipient("Tienda Ruta N", "https://wallet.example/tienda");
     await addRecipient("Juan", "https://wallet.example/juan");
@@ -161,17 +161,24 @@ describe("SMS MVP short commands", () => {
     await db.close();
   });
 
-  it("9 muestra la ayuda corta", async () => {
-    const help = await run("9");
-    expect(help.reply).toBe(
-      ["P 1000 2: pagar", "Codigo recibido: confirmar", "0: cancelar", "1: ultimo pago", "2: destinos", "9: ayuda"].join(
-        "\n",
-      ),
-    );
+  const SHORT_HELP = [
+    "P 1000 ANA: pagar",
+    "Codigo recibido: confirmar",
+    "0: cancelar",
+    "1: ultimo pago",
+    "9: ayuda",
+  ].join("\n");
+
+  it("9 y las palabras de ayuda devuelven la misma ayuda corta, sin listar destinos", async () => {
+    for (const text of ["9", "AYUDA", "ayuda", "HELP", "help", "Ayuda"]) {
+      const help = await run(text);
+      expect(help.reply).toBe(SHORT_HELP);
+      expect(help.reply).not.toMatch(/destino/i);
+    }
   });
 
-  it("P 1000 2 prepara el pago con la moneda de la wallet y el número de destino", async () => {
-    const res = await run("P 1000 2");
+  it("P 1000 <alias> prepara el pago con la moneda de la wallet", async () => {
+    const res = await run("P 1000 Tienda Ruta N");
     expect(res.state).toBe("AWAITING_CONFIRMATION");
     expect(res.reply).toContain("Envias: 1000");
     expect(res.reply).toContain("Destino: Tienda Ruta N");
@@ -194,73 +201,73 @@ describe("SMS MVP short commands", () => {
     expect(res.state).toBe("AWAITING_CONFIRMATION");
     expect(res.reply).toContain("Destino: Tienda Ruta N");
     expect(res.reply).toContain("Responde");
+    await run("0");
 
-    const spaced = await run("P 1000 Tienda Ruta N");
-    // The first pending payment blocks the second: the destination still parsed.
-    expect(spaced.reply).toContain("Ya tienes un pago pendiente");
+    const mixed = await run("P 1000 tIeNdA rUtA n");
+    expect(mixed.state).toBe("AWAITING_CONFIRMATION");
+    expect(mixed.reply).toContain("Destino: Tienda Ruta N");
   });
 
   it("P acepta espacios de más y rechaza formatos incorrectos", async () => {
-    const extra = await run("P   1000   1");
+    const extra = await run("P   1000   Ana");
     expect(extra.state).toBe("AWAITING_CONFIRMATION");
     await run("0");
 
-    for (const bad of ["P 1000", "P abc 1", "P 1.000 1", "P 1,000 1", "P -5 1", `P ${MVP_MAX_AMOUNT_MAJOR + 1} 1`]) {
+    for (const bad of ["P 1000", "P abc Ana", "P 1.000 Ana", "P 1,000 Ana", "P -5 Ana", `P ${MVP_MAX_AMOUNT_MAJOR + 1} Ana`]) {
       const res = await run(bad);
-      expect(res.reply).toBe("Formato: P 1000 2. Envia 2 para ver destinos.");
+      expect(res.reply).toBe("Formato: P 1000 ANA. 9 para ayuda.");
     }
     const count = await db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM payments`);
     expect(count?.n).toBe(1);
   });
 
-  it("usa el número de destino solo dentro de P (no choca con los comandos)", async () => {
-    // A bare `2` is the destinations command, never a payment destination.
-    const list = await run("2");
-    expect(list.reply).toContain("Destinos:");
+  it("un destinatario numérico ya no existe: P 1000 2 no resuelve ningún pago", async () => {
+    const res = await run("P 1000 2");
+    expect(res.reply).toBe("Destino no encontrado. 9 para ayuda.");
 
-    // A bare unknown digit is not a command.
+    const count = await db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM payments`);
+    expect(count?.n).toBe(0);
+
+    // A bare unknown digit is not a command either.
     const unknown = await run("7");
     expect(unknown.reply).toBe("Comando no reconocido. 9 para ayuda.");
   });
 
   it("destino inexistente informa y no crea pagos", async () => {
-    const res = await run("P 1000 99");
-    expect(res.reply).toBe("Destino no encontrado. Envia 2 para ver destinos.");
+    const res = await run("P 1000 Nadie");
+    expect(res.reply).toBe("Destino no encontrado. 9 para ayuda.");
     const count = await db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM payments`);
     expect(count?.n).toBe(0);
   });
 
   it("solo permite un pago pendiente por usuario", async () => {
-    await run("P 1000 2");
-    const second = await run("P 2000 3");
+    await run("P 1000 Tienda Ruta N");
+    const second = await run("P 2000 Juan");
     expect(second.reply).toBe("Ya tienes un pago pendiente. Usa su codigo o envia 0 para cancelar.");
     const count = await db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM payments`);
     expect(count?.n).toBe(1);
   });
 
-  it("2 lista los destinos con números permanentes", async () => {
+  it("2 ya no lista destinos: es un comando desconocido", async () => {
     const res = await run("2");
-    expect(res.reply).toBe(
-      ["Destinos:", "1 Ana", "2 Tienda Ruta N", "3 Juan", "Para pagar: P 1000 2"].join("\n"),
-    );
+    expect(res.reply).toBe("Comando no reconocido. 9 para ayuda.");
+    expect(res.reply).not.toMatch(/destino/i);
+    expect(res.reply).not.toMatch(/Ana|Juan|Tienda/);
   });
 
-  it("2 no reutiliza el número de un destinatario borrado", async () => {
-    const removed = await db.get<{ id: string }>(`SELECT id FROM recipients WHERE number = 2`);
+  it("un destinatario borrado deja de resolver y su número no lo sustituye", async () => {
+    const removed = await db.get<{ id: string }>(`SELECT id FROM recipients WHERE alias = 'Tienda Ruta N'`);
     await db.run(`DELETE FROM recipients WHERE id = ?`, [removed?.id]);
-    await addRecipient("Pedro", "https://wallet.example/pedro");
 
-    const res = await run("2");
-    expect(res.reply).toBe(
-      ["Destinos:", "1 Ana", "3 Juan", "4 Pedro", "Para pagar: P 1000 2"].join("\n"),
-    );
+    const gone = await run("P 1000 Tienda Ruta N");
+    expect(gone.reply).toBe("Destino no encontrado. 9 para ayuda.");
 
-    // The deleted number is gone for good.
-    const gone = await run("P 1000 2");
-    expect(gone.reply).toBe("Destino no encontrado. Envia 2 para ver destinos.");
+    // Its old recipient number never resolves either.
+    const numbered = await run("P 1000 2");
+    expect(numbered.reply).toBe("Destino no encontrado. 9 para ayuda.");
   });
 
-  it("cada usuario tiene su propia lista de destinos", async () => {
+  it("cada usuario resuelve solo sus propios alias", async () => {
     await db.run(
       `INSERT INTO users (id, phone, phone_verified_at, status) VALUES ('u2', ?, ?, 'active')`,
       [OTHER_PHONE, nowIso()],
@@ -277,14 +284,18 @@ describe("SMS MVP short commands", () => {
       { userId: "u2", alias: "Carol", walletAddress: "https://wallet.example/carol" },
     );
 
-    const res = await run("P 1000 1", OTHER_PHONE);
+    const res = await run("P 1000 Carol", OTHER_PHONE);
     expect(res.state).toBe("AWAITING_CONFIRMATION");
     expect(res.reply).toContain("Destino: Carol");
+
+    // An alias owned by another user is never visible here.
+    const foreign = await run("P 1000 Ana", OTHER_PHONE);
+    expect(foreign.reply).toBe("Destino no encontrado. 9 para ayuda.");
   });
 
   it("un código de 4 dígitos confirma el pago pendiente y avisa al confirmar", async () => {
     await storeGrantedToken();
-    const prepared = await run("P 1000 2");
+    const prepared = await run("P 1000 Tienda Ruta N");
     const code = codeFromShort(prepared.reply);
 
     const created: string[] = [];
@@ -315,7 +326,7 @@ describe("SMS MVP short commands", () => {
     deps = { config, db, provider, sms, secretBox };
     await storeGrantedToken();
 
-    const prepared = await run("P 1000 2");
+    const prepared = await run("P 1000 Tienda Ruta N");
     const code = codeFromShort(prepared.reply);
     const confirm = await run(code);
     expect(confirm.state).toBe("COMPLETED");
@@ -323,7 +334,7 @@ describe("SMS MVP short commands", () => {
   });
 
   it("cuenta los intentos fallidos y los bloquea", async () => {
-    const prepared = await run("P 1000 2");
+    const prepared = await run("P 1000 Tienda Ruta N");
     const code = codeFromShort(prepared.reply);
     const wrong = code === "0000" ? "1111" : "0000";
 
@@ -338,7 +349,7 @@ describe("SMS MVP short commands", () => {
   });
 
   it("un código vencido vence el pago y permite crear otro", async () => {
-    const prepared = await run("P 1000 2");
+    const prepared = await run("P 1000 Tienda Ruta N");
     const code = codeFromShort(prepared.reply);
     await db.run(`UPDATE payments SET confirmation_expires_at = ? WHERE state = 'AWAITING_CONFIRMATION'`, [
       "2000-01-01T00:00:00.000Z",
@@ -350,18 +361,18 @@ describe("SMS MVP short commands", () => {
     expect((await paymentRow()).state).toBe("EXPIRED");
 
     // A new payment can be created right away.
-    const next = await run("P 2000 3");
+    const next = await run("P 2000 Juan");
     expect(next.state).toBe("AWAITING_CONFIRMATION");
     expect(next.reply).toContain("Envias: 2000");
   });
 
   it("un pago vencido no bloquea un pago nuevo aunque no se confirme", async () => {
-    await run("P 1000 2");
+    await run("P 1000 Tienda Ruta N");
     await db.run(`UPDATE payments SET confirmation_expires_at = ? WHERE state = 'AWAITING_CONFIRMATION'`, [
       "2000-01-01T00:00:00.000Z",
     ]);
 
-    const next = await run("P 3000 1");
+    const next = await run("P 3000 Ana");
     expect(next.state).toBe("AWAITING_CONFIRMATION");
     const count = await db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM payments WHERE state = 'AWAITING_CONFIRMATION'`);
     expect(count?.n).toBe(1);
@@ -371,7 +382,7 @@ describe("SMS MVP short commands", () => {
     const cancelled = await run("0");
     expect(cancelled.reply).toBe("No tienes un pago pendiente. 9 para ayuda.");
 
-    await run("P 1000 2");
+    await run("P 1000 Tienda Ruta N");
     const res = await run("0");
     expect(res.reply).toBe("Pago cancelado. No se envio dinero.");
     expect(res.state).toBe("CANCELLED");
@@ -385,7 +396,7 @@ describe("SMS MVP short commands", () => {
     const none = await run("1");
     expect(none.reply).toBe("No tienes pagos. 9 para ayuda.");
 
-    const prepared = await run("P 1000 2");
+    const prepared = await run("P 1000 Tienda Ruta N");
     const code = codeFromShort(prepared.reply);
     const status = await run("1");
     expect(status.reply).toContain("Ultimo pago: 1000 a Tienda Ruta N.");
@@ -400,11 +411,11 @@ describe("SMS MVP short commands", () => {
   });
 
   it("nunca reutiliza un código para otro pago del mismo usuario", async () => {
-    const first = await run("P 1000 2");
+    const first = await run("P 1000 Tienda Ruta N");
     const firstCode = codeFromShort(first.reply);
     await run("0");
 
-    const second = await run("P 2000 3");
+    const second = await run("P 2000 Juan");
     const secondCode = codeFromShort(second.reply);
     expect(secondCode).not.toBe(firstCode);
 
@@ -413,12 +424,12 @@ describe("SMS MVP short commands", () => {
   });
 
   it("acepta mayúsculas/minúsculas y espacios extra en todos los comandos", async () => {
-    const prepared = await run("  p   1000   2  ");
+    const prepared = await run("  p   1000   tienda ruta n  ");
     expect(prepared.state).toBe("AWAITING_CONFIRMATION");
     const code = codeFromShort(prepared.reply);
 
-    const list = await run("2");
-    expect(list.reply).toContain("1 Ana");
+    const unknownTwo = await run("2");
+    expect(unknownTwo.reply).toBe("Comando no reconocido. 9 para ayuda.");
 
     const status = await run("1");
     expect(status.reply).toContain("Estado: pendiente.");
@@ -427,13 +438,13 @@ describe("SMS MVP short commands", () => {
     expect(cancelled.state).toBe("CANCELLED");
 
     const help = await run("9");
-    expect(help.reply).toContain("P 1000 2: pagar");
+    expect(help.reply).toContain("P 1000 ANA: pagar");
     expect(code).toMatch(/^\d{4}$/);
   });
 
   it("mantiene los comandos largos como alternativa compatible", async () => {
     const prepared = await run("PAGAR 5000 A bob");
-    // `bob` is not in the short list, so the long command resolves it by alias.
+    // `bob` is not among the sender's aliases, so the long command fails too.
     expect(prepared.reply).toMatch(/no existe un destinatario/i);
 
     const long = await run("pagar 1000 a Ana");
@@ -448,8 +459,11 @@ describe("SMS MVP short commands", () => {
     const estado = await run(`estado ${reference}`);
     expect(estado.reply).toContain("cancelado");
 
-    const ayuda = await run("AYUDA");
-    expect(ayuda.reply).toContain("PAGAR <monto>");
+    // Both the word and the digit return the same short help now.
+    for (const text of ["AYUDA", "ayuda", "HELP"]) {
+      const ayuda = await run(text);
+      expect(ayuda.reply).toBe(SHORT_HELP);
+    }
   });
 
   it("parsea montos MVP como enteros positivos en unidades mayores", () => {
