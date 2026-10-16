@@ -60,11 +60,16 @@ const envSchema = z
    */
   OP_GRANT_INTERVAL: z.string().default(""),
 
-  SMS_PROVIDER: z.literal("mock").default("mock"),
+  SMS_PROVIDER: z.enum(["mock", "relayion"]).default("mock"),
   SMS_FROM: z.string().min(1).default("+570000000000"),
   SMS_WEBHOOK_SECRET: z.string().default("dev-webhook-secret"),
 
-
+  // Relayion (SMS_PROVIDER=relayion). RELAYION_WEBHOOK_SECRET signs the webhook
+  // payload (HMAC-SHA256 of the raw body); RELAYION_API_KEY authenticates API
+  // calls. RELAYION_DEVICE_ID is an optional routing override.
+  RELAYION_API_KEY: z.string().default(""),
+  RELAYION_WEBHOOK_SECRET: z.string().default(""),
+  RELAYION_DEVICE_ID: z.string().default(""),
 })
   .superRefine((config, ctx) => {
     if (config.OP_GRANT_INTERVAL && !isValidGrantInterval(config.OP_GRANT_INTERVAL)) {
@@ -91,6 +96,13 @@ const envSchema = z
           path: ["OP_PRIVATE_KEY_PEM"],
           message: "Define OP_PRIVATE_KEY_PATH o OP_PRIVATE_KEY_PEM con PAYMENT_PROVIDER=openpayments",
         });
+      }
+    }
+    if (config.SMS_PROVIDER === "relayion") {
+      for (const key of ["RELAYION_API_KEY", "RELAYION_WEBHOOK_SECRET"] as const) {
+        if (!config[key]) {
+          ctx.addIssue({ code: "custom", path: [key], message: `${key} es obligatoria con SMS_PROVIDER=relayion` });
+        }
       }
     }
     if (config.DEMO_WALLET_ASSIGNMENT_ENABLED === "true") {

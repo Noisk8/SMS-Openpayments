@@ -25,5 +25,11 @@ AI Policy. One file per topic/session.
   configuration for the Open Payments model, preflight script and Twilio adapter.
 - [`2026-10-16-rotacion-grant.md`](2026-10-16-rotacion-grant.md) — access-token rotation and
   interval-based grant limits (`OP_GRANT_INTERVAL`).
+- [`2026-10-16-demo-wallet-pool.md`](2026-10-16-demo-wallet-pool.md) — demo wallet pool
+  (assignment at registration and automatic top-up).
+- [`2026-10-16-demo-external-recipient.md`](2026-10-16-demo-external-recipient.md) — optional
+  external payment destination for the demo wallet pool.
+- [`2026-10-16-relayion-provider.md`](2026-10-16-relayion-provider.md) — Relayion SMS provider
+  adapter (signed webhooks, body enrichment, outbound sends).
 
 Convention: `YYYY-MM-DD-topic.md`, with the prompt exactly as sent plus the relevant team answers.

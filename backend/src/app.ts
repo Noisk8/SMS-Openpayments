@@ -32,6 +32,22 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   const app = Fastify({ logger: deps.config.NODE_ENV !== "test" });
 
 
+  // Providers that sign the raw payload (e.g. Relayion) need the original bytes.
+  // Keep parsing JSON as before, but stash the untouched string on the request.
+  app.addContentTypeParser("application/json", { parseAs: "string" }, (request, body, done) => {
+    const raw = body as string;
+    (request as { rawBody?: string }).rawBody = raw;
+    if (raw.length === 0) {
+      done(null, undefined);
+      return;
+    }
+    try {
+      done(null, JSON.parse(raw));
+    } catch (error) {
+      done(error as Error, undefined);
+    }
+  });
+
   app.get("/health", async () => {
     await deps.db.get("SELECT 1");
     return {
