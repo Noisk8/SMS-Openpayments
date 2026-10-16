@@ -19,16 +19,16 @@ No hagas review, subelo sin necesidad de eso
 A partir de ahora debes guardar los propmpts!
 ```
 
-## Resultado (lo que hizo la IA)
+## Outcome (what the AI did)
 
-- Cerró el bootstrap **sin revisión** (decisión explícita del equipo): verificación mecánica `npm test`
-  en verde, commit candidato `cd9e92b` y tag `known-good` en ese commit. `doctor` del kit → `ready`.
-- Subió `main` a `origin` (`Noisk8/SMS-Openpayments`), fast-forward `982ae5e..cd9e92b`.
-- Dejó de guardar prompts temporalmente por pedido del equipo y **reatomó el registro a partir de
-  este punto** (este archivo).
+- Closed the bootstrap **without review** (explicit team decision): mechanical verification `npm test`
+  green, candidate commit `cd9e92b`, and `known-good` tag on that commit. Kit `doctor` → `ready`.
+- Pushed `main` to `origin` (`Noisk8/SMS-Openpayments`), fast-forward `982ae5e..cd9e92b`.
+- Temporarily stopped logging prompts at the team's request, then **resumed logging from this point on**
+  (this file).
 
-## Nota
+## Note
 
-- Prompts anteriores al reinicio ya registrados en `2026-10-16-reinicio-y-sdk.md`,
-  `2026-10-16-divulgacion-ia.md` y `2026-10-16-workflow-agentes.md`.
-- Pendiente del equipo: enviar las **specs del backend** tras decidir el framework.
+- Prompts before the reset are already logged in `2026-10-16-reinicio-y-sdk.md`,
+  `2026-10-16-divulgacion-ia.md` and `2026-10-16-workflow-agentes.md`.
+- Team pending: send the **backend specs** after deciding the framework.

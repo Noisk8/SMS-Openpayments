@@ -1,18 +1,18 @@
 # SMS-Openpayments
 
-Pagos por SMS en Colombia usando **Interledger / Open Payments**. La idea: una persona escribe un
-mensaje de texto para enviar dinero, consultar el estado o crear su cuenta, sin apps ni conexión a
-internet.
+SMS payments in Colombia powered by **Interledger / Open Payments**. The idea: a person sends a text
+message to pay someone, check a payment status, or create their account — no apps, no internet
+connection required.
 
-## Estructura
+## Repository layout
 
 ```
-backend/     backend Node.js + TypeScript (Fastify, better-sqlite3, Zod, Vitest, @interledger/open-payments)
-prompts/     registro de prompts de IA (política del hackatón)
-AI_USAGE.md  divulgación de uso de IA
+backend/     Node.js + TypeScript backend (Fastify, better-sqlite3, Zod, Vitest, @interledger/open-payments)
+prompts/     AI prompt log (hackathon AI policy)
+AI_USAGE.md  AI usage disclosure
 ```
 
-## Ejecutar el backend
+## Run the backend
 
 ```sh
 cd backend
@@ -21,13 +21,14 @@ npm run dev            # http://localhost:3000
 npm run verify         # typecheck + tests
 ```
 
-Detalle en [`backend/README.md`](backend/README.md).
+See [`backend/README.md`](backend/README.md) for details.
 
-## Divulgación de IA
+## AI disclosure
 
-Este proyecto usa IA durante el hackatón. Ver [`AI_USAGE.md`](AI_USAGE.md) y [`prompts/`](prompts/).
+This project uses AI during the hackathon. See [`AI_USAGE.md`](AI_USAGE.md) and [`prompts/`](prompts/).
 
-## Workflow de agentes
+## Agent workflow
 
-El repo usa el *Agent Workflow Kit* de forma **local** (`.opencode/`, `.agent-workflow/`,
-`scripts/harness/`, `docs/agent-workflow/`), en `.gitignore`: cada integrante instala el suyo.
+The repository uses the *Agent Workflow Kit* **locally** (`.opencode/`, `.agent-workflow/`,
+`scripts/harness/`, `docs/agent-workflow/`), all listed in `.gitignore`: each contributor installs
+their own.

@@ -1,54 +1,57 @@
-# Divulgación de uso de IA
+# AI Usage Disclosure
 
-Este archivo cumple la **Política de IA** del 2026 Hackatón de Open Payments: declarar qué
-herramientas de IA se usaron, para qué, y en qué parte del proyecto. Los prompts reales están en
+This file satisfies the **AI Policy** of the 2026 Open Payments Hackathon: it declares which AI
+tools were used, for what, and where in the project. The real prompts are stored in
 [`prompts/`](prompts/).
 
-## Herramientas usadas
+## Tools used
 
-- **OpenCode** (agente de IA; modelo **DeepSeek V4.1 Flash**) — usado en esta sesión para reiniciar
-  el repositorio, redactar la divulgación de IA e instalar el workflow de agentes.
-- **Asistentes de IA previos** — el prototipo original (Next.js + Prisma + proveedores SMS + modo
-  mock) fue generado con asistencia de IA antes del reinicio. Ese código quedó eliminado del árbol de
-  trabajo y se conserva solo en el historial de git.
+- **OpenCode** (AI agent; model **DeepSeek V4.1 Flash**) — used in this session to reset the
+  repository, write the AI disclosure, install the local agent workflow, and build the backend.
+- **Previous AI assistants** — the original prototype (Next.js + Prisma + SMS providers + mock mode)
+  was generated with AI assistance before the reset. That code was removed from the working tree and
+  is preserved only in git history.
 
-## Dónde y cómo se usó la IA
+## Where and how AI was used
 
-### 1. Reinicio del repositorio a un esqueleto limpio
+### 1. Repository reset to a clean skeleton
 
-- Se usó el agente para investigar los SDKs oficiales de Open Payments y para eliminar el código de
-  aplicación anterior.
-- Decisión y alcance (qué borrar y qué conservar) tomada por el equipo; el agente ejecutó la limpieza.
+- The agent researched the official Open Payments SDKs and removed the previous application code.
+- The team decided the scope (what to delete and what to keep); the agent executed the cleanup.
 
-### 2. Divulgación de IA y documentación de agentes
+### 2. AI disclosure and agent documentation
 
-- `AI_USAGE.md`, `prompts/` y `AGENTS.md`: redactados con el agente y revisados por el equipo.
+- `AI_USAGE.md`, `prompts/` and `AGENTS.md`: drafted with the agent and reviewed by the team.
 
-### 3. Workflow de agentes (solo local)
+### 3. Agent workflow (local only)
 
-- Instalación del *Agent Workflow Kit* (`Another-DevX/agent-workflow-kit`) con el CLI oficial. Las
-  rutas que genera están en `.gitignore` y no se publican.
+- Installed the *Agent Workflow Kit* (`Another-DevX/agent-workflow-kit`) with its official CLI. The
+  paths it generates are in `.gitignore` and are not published.
 
-### 4. Código de la aplicación
+### 4. Backend implementation (`backend/`)
 
-- **Todavía no existe.** El framework del backend está por decidir. Cuando se escriba, se documentará
-  aquí archivo por archivo, incluyendo explícitamente el servicio de Open Payments, que el equipo
-  buscará escribir y entender con la menor ayuda de IA posible.
+- The agent scaffolded the backend foundation and the first feature verticals: environment config,
+  SQLite schema and migrations, the SMS gateway (webhook, persistence, deduplication, dev simulator),
+  the persistent job queue, secret encryption, the payments domain and the accounts domain.
+- Files to review by hand: the Open Payments adapter (`backend/src/payments/open-payments.ts`) and
+  the payment service (`backend/src/payments/service.ts`) — the team will read, correct and test the
+  Open Payments flow itself as the lowest-AI part of the codebase.
 
-## Qué hicimos nosotros
+## What we did ourselves
 
-- Definir el alcance, los recortes y el stack.
-- Revisar y validar cada cambio del agente antes de aceptarlo.
-- (Pendiente) Reescribir y probar el flujo de Open Payments a mano y documentarlo en
-  [`docs/`](docs/).
+- Defined the scope, the stack and the cuts.
+- Owned the Open Payments design decisions (grant budgets, confirmation model).
+- (Ongoing) Reviewing and testing every AI change before accepting it.
 
-## Registro de prompts
+## Prompt log
 
-Ver [`prompts/`](prompts/):
+See [`prompts/`](prompts/):
 
 - [`prompts/2026-10-16-reinicio-y-sdk.md`](prompts/2026-10-16-reinicio-y-sdk.md)
 - [`prompts/2026-10-16-divulgacion-ia.md`](prompts/2026-10-16-divulgacion-ia.md)
 - [`prompts/2026-10-16-workflow-agentes.md`](prompts/2026-10-16-workflow-agentes.md)
 - [`prompts/2026-10-16-cierre-bootstrap.md`](prompts/2026-10-16-cierre-bootstrap.md)
+- [`prompts/2026-10-16-specs-backend.md`](prompts/2026-10-16-specs-backend.md)
+- [`prompts/2026-10-16-english-convention.md`](prompts/2026-10-16-english-convention.md)
 
-> Nota: actualizar este archivo cada vez que la IA toque código nuevo.
+> Note: update this file whenever AI touches new code.

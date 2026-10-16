@@ -1,41 +1,45 @@
-# Guía para agentes — SMS-Openpayments
+# Agent guidelines — SMS-Openpayments
 
-Este repositorio es un backend de pagos por SMS con Interledger / Open Payments (Node.js + TypeScript).
-El framework HTTP todavía no está elegido; no asumas Next.js ni ningún stack anterior.
+This repository is an SMS payments backend built on Interledger / Open Payments.
+Stack: Node.js + TypeScript — Fastify, better-sqlite3 (raw SQL, no ORM), Zod, Vitest,
+`@interledger/open-payments`.
 
-## Contribuciones de la IA
+## Language
 
-- Toda intervención de la IA debe producir código funcional y responder a una necesidad concreta.
-- Antes de modificar código, revisar el comportamiento existente y las dependencias de la parte
-  afectada para evitar romper funciones que ya operan correctamente.
-- Mantener la compatibilidad con los flujos actuales. No eliminar ni alterar funcionalidades
-  existentes salvo que la tarea lo requiera expresamente.
-- Después de cada cambio, ejecutar `./scripts/verify.sh` (o `npm test`) y corregir los errores
-  introducidos antes de dar la tarea por terminada.
-- Si no es posible verificar un cambio, indicar con claridad qué quedó sin comprobar y qué riesgo
-  puede afectar al funcionamiento.
+- **All commit messages and documentation are written in English** (READMEs, `docs/`,
+  `AI_USAGE.md`, `prompts/`).
+- Code identifiers are in English.
+- Day-to-day chat with the team may be in Spanish.
 
-## Política de IA del hackatón (obligatoria)
+## AI contributions
 
-1. **Divulgación.** Mantener [`AI_USAGE.md`](../AI_USAGE.md) en la raíz al día: qué herramientas de IA
-   se usaron, para qué, y en qué archivos (o "todo el proyecto" si aplica). Indicar explícitamente
-   los archivos con poca o ninguna IA.
-2. **Registro de prompts.** Guardar en [`prompts/`](../prompts/) el **texto real** de los prompts
-   enviados a la IA (no resúmenes), con un archivo por tema o sesión. Añadir el prompt nuevo ahí
-   antes de dar por cerrada una tarea relevante.
-3. **Criterio humano.** La IA es una herramienta, no un sustituto del criterio del equipo. Revisar,
-   probar y entender cualquier código antes de publicarlo. Confiar, pero verificar: el código de IA
-   puede tener errores sutiles, ser inseguro o usar APIs desactualizadas.
-4. **Preparación Open Payments.** Antes de construir sobre Open Payments, completar el curso de Platzi
-   o revisar la guía oficial: <https://openpayments.dev/>.
+- Every AI change must produce working code that answers a concrete need.
+- Before changing code, review the existing behavior and dependencies to avoid breaking what
+  already works.
+- Keep compatibility with current flows. Do not remove or alter existing functionality unless the
+  task explicitly requires it.
+- After each change, run `./scripts/verify.sh` (or `npm run verify`) and fix any errors introduced
+  before considering the task done.
+- If a change cannot be verified, state clearly what was left unchecked and what risk it carries.
 
-## Convenciones de trabajo
+## Hackathon AI policy (mandatory)
 
-- Respuestas y documentación del proyecto en **español**; identificadores de código en inglés.
-- El *Agent Workflow Kit* vive solo en local (`.opencode/`, `.agent-workflow/`, `scripts/harness/`,
-  `docs/agent-workflow/`); no se sube al repositorio.
+1. **Disclosure.** Keep [`AI_USAGE.md`](../AI_USAGE.md) up to date: which AI tools were used, for
+   what, and where in the project (or "throughout" if applicable). Explicitly list the files with
+   little or no AI.
+2. **Prompt log.** Store in [`prompts/`](../prompts/) the **verbatim** text of the prompts sent to AI
+   (not summaries), one file per topic/session. Append new prompts there before closing a relevant
+   task.
+3. **Human judgment.** AI is a tool, not a replacement for the team's judgment. Review, test, and
+   understand any code before publishing it. Trust, but verify: AI code can contain subtle bugs, be
+   insecure, or use outdated APIs.
+4. **Open Payments preparation.** Before building on Open Payments, complete the Platzi course or
+   review the official guide: <https://openpayments.dev/>.
 
-<!-- El Agent Workflow Kit añade a continuación su bloque gestionado. No editar ese bloque a mano. -->
+## Working conventions
+
+- The Agent Workflow Kit lives only locally (`.opencode/`, `.agent-workflow/`, `scripts/harness/`,
+  `docs/agent-workflow/`); it is not committed.
 
 <!-- agent-workflow:begin -->
 # Agent Workflow
@@ -64,7 +68,7 @@ AGENTS.md
 Canonical mechanical verification:
 
 ```sh
-npm test
+npm run verify
 ```
 
 Rules:

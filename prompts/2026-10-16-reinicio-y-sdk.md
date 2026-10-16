@@ -100,17 +100,16 @@ Eso se alinea con lo que exige la evaluación: **solicitud, autorización, ejecu
 **Mi recomendación concreta:** construir una aplicación cliente de Open Payments para pagos por SMS, con autorización previa y límites, usando la Test Wallet como infraestructura. Su diferenciador será hacer el pago accesible y confiable desde el teléfono básico.  vamos a hacer algo asi, entonces no dejes tantas cosas que no vamos a usar, hagamos el backend en un SDK simple y sencillo, depende del lenguaje que permita usar openpayments, investiga y me dices cual
 ```
 
-## Respuestas del equipo a las preguntas de aclaración
+## Team answers to the clarifying questions
 
-- **Alcance de la limpieza:** «Yo quitaría aproximadamente todo y dejaría el proyecto virgen».
-- **Punto de partida:** «Solo esqueleto + kit» (borrar Next.js, `src/`, `prisma/`, `tests/`, `docs/`,
-  Docker y configs; conservar git, kit de agentes local, `AI_USAGE.md`, `prompts/`, `.gitignore` y
-  `README`; recrear `package.json`).
-- **Framework del backend:** «Decidirlo después».
+- **Cleanup scope:** "I would remove roughly everything and leave the project virgin."
+- **Starting point:** "Skeleton + kit only" (delete Next.js, `src/`, `prisma/`, `tests/`, `docs/`,
+  Docker and configs; keep git, the local agent kit, `AI_USAGE.md`, `prompts/`, `.gitignore` and
+  `README`; recreate `package.json`).
+- **Backend framework:** "Decide later".
 
-## Resultado (lo que hizo la IA)
+## Outcome (what the AI did)
 
-- Investigó los SDKs oficiales de Open Payments: **Node.js/TypeScript**
-  (`@interledger/open-payments`) y **PHP** (`interledger/open-payments-php`). Recomendó **Node.js +
-  TypeScript**.
-- Eliminó el código de aplicación y dejó el esqueleto descrito.
+- Researched the official Open Payments SDKs: **Node.js/TypeScript** (`@interledger/open-payments`)
+  and **PHP** (`interledger/open-payments-php`). Recommended **Node.js + TypeScript**.
+- Removed the application code and left the skeleton described above.

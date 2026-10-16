@@ -1,89 +1,90 @@
 # Backend — SMS + Open Payments
 
-Backend Node.js + TypeScript. Recibe SMS reales por webhook, interpreta comandos y ejecuta pagos
-con Open Payments (`@interledger/open-payments`).
+Node.js + TypeScript backend. It receives real SMS through a webhook, interprets commands, and
+executes payments with Open Payments (`@interledger/open-payments`).
 
 ## Stack
 
-| Componente | Tecnología |
+| Component | Technology |
 |---|---|
 | Runtime | Node.js >= 20 + TypeScript |
 | HTTP | Fastify |
-| Base de datos | SQLite + better-sqlite3 (SQL directo, sin ORM) |
-| Validación | Zod |
-| Pagos | `@interledger/open-payments` |
-| Pruebas | Vitest |
+| Database | SQLite + better-sqlite3 (raw SQL, no ORM) |
+| Validation | Zod |
+| Payments | `@interledger/open-payments` |
+| Tests | Vitest |
 
-## Arranque
+## Getting started
 
 ```sh
 cd backend
 npm install
-cp .env.example .env      # ajusta valores
-npm run db:migrate        # aplica el esquema SQLite
+cp .env.example .env      # adjust values
+npm run db:migrate        # apply the SQLite schema
 npm run dev               # http://localhost:3000
 ```
 
-## Comandos
+## Commands
 
 ```sh
-npm run dev          # servidor con recarga (tsx watch)
-npm run start        # servidor sin recarga
+npm run dev          # server with reload (tsx watch)
+npm run start        # server without reload
 npm run typecheck    # tsc --noEmit
 npm run test         # Vitest
-npm run verify       # typecheck + tests (gate canónico)
-npm run db:migrate   # aplica migraciones
+npm run verify       # typecheck + tests (canonical gate)
+npm run db:migrate   # apply migrations
 ```
 
-## Sneak peek (modo local, sin credenciales)
+## Sneak peek (local mode, no credentials)
 
-El proveedor de SMS `mock` y el de pagos `fake` permiten probar el flujo sin infraestructura real.
-Con el servidor levantado:
+The `mock` SMS provider and the `fake` payments provider let you exercise the flow without real
+infrastructure. With the server running:
 
 ```sh
-# Salud
+# Health
 curl -s localhost:3000/health
 
-# Simular un SMS entrante (solo desarrollo)
+# Simulate an inbound SMS (development only)
 curl -s -X POST localhost:3000/dev/sms/simulate \
   -H 'content-type: application/json' \
   -d '{"from":"+573001234567","text":"AYUDA"}'
 
-# Bandeja de salida del proveedor mock
+# Mock provider outbox
 curl -s localhost:3000/dev/sms/outbox
 
-# Mensajes persistidos
+# Persisted messages
 curl -s localhost:3000/dev/sms/messages
 ```
 
-## Webhook real
+## Real webhook
 
-`POST /webhooks/sms` — el proveedor debe firmar/autenticar la petición. En el adaptador `mock` se usa
-la cabecera `x-webhook-secret`. El endpoint persiste el mensaje antes de reconocerlo y deduplica por
-`(provider, provider_message_id)`.
+`POST /webhooks/sms` — the provider must sign/authenticate the request. The `mock` adapter uses the
+`x-webhook-secret` header. The endpoint persists the message before acknowledging it and
+deduplicates by `(provider, provider_message_id)`.
 
-## Estructura
+## Layout
 
 ```
 src/
-  server.ts            arranque (config, db, proveedor, listen)
-  app.ts               construcción de Fastify (health, rutas, errores)
-  config.ts            validación de entorno con Zod
-  domain.ts            tipos y estados
-  errors.ts            AppError + mapeo a HTTP
-  db/                  conexión, migraciones (SQL) y helpers
-  sms/                 gateway SMS: rutas, servicio, comandos, proveedores
-  payments/            (en construcción) servicio de pagos + adaptador Open Payments
-  jobs/                cola persistente sobre SQLite
-  security/            cifrado AES-256-GCM de credenciales
+  server.ts            entry point (config, db, provider, listen)
+  app.ts               Fastify construction (health, routes, errors)
+  config.ts            Zod-validated environment
+  domain.ts            types and states
+  errors.ts            AppError + HTTP mapping
+  db/                  connection, migrations (SQL) and helpers
+  sms/                 SMS gateway: routes, service, commands, providers
+  payments/            payments service + Open Payments adapter (boundary: types.ts)
+  jobs/                persistent queue over SQLite
+  security/            AES-256-GCM encryption of credentials
+tests/
 ```
 
-## Estado (iteración 1)
+## Status (iteration 1)
 
-- [x] Esquema SQLite completo (users, wallets, recipients, grants, payments, sms_messages, jobs, audit_events)
-- [x] Config con Zod, cifrado de secretos, cola de trabajos persistente
-- [x] Gateway SMS: webhook firmado, persistencia, deduplicación, simulador dev
-- [ ] Servicio de comandos completo (PAGAR/CONFIRMAR/CANCELAR/ESTADO)
-- [ ] Servicio de pagos + adaptador Open Payments
-- [ ] Onboarding, destinatarios, ciclo de vida de grants
-- [ ] Procesador de trabajos y reconciliación
+- [x] Full SQLite schema (users, wallets, recipients, grants, payments, sms_messages, jobs, audit_events)
+- [x] Zod config, secret encryption, persistent job queue
+- [x] SMS gateway: signed webhook, persistence, deduplication, dev simulator
+- [ ] Full command service (PAGAR/CONFIRMAR/CANCELAR/ESTADO)
+- [ ] Payments service + Open Payments adapter
+- [ ] Onboarding, recipients, grant lifecycle
+- [ ] Job processor and reconciliation

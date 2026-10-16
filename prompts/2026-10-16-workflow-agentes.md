@@ -12,16 +12,16 @@
 https://github.com/Another-DevX/agent-workflow-kit finalmente, implementa esta arquitectura para que funcione LOCALMENTE para mis agentes! y ten en cuenta lo que añadiste con las reglas
 ```
 
-## Respuesta del equipo a la pregunta de aclaración
+## Team answer to the clarifying question
 
-- **Qué queda solo en local (gitignore):** «Todo el workflow local (Recomendado)» — `.opencode/`,
+- **What stays local only (gitignore):** "The whole local workflow (Recommended)" — `.opencode/`,
   `.agent-workflow/`, `.orchestration/`, `.worktrees/`, `.review/`, `scripts/verify*.sh`,
-  `scripts/harness/` y `docs/agent-workflow/` no se suben al repositorio.
+  `scripts/harness/` and `docs/agent-workflow/` are not pushed to the repository.
 
-## Resultado (lo que hizo la IA)
+## Outcome (what the AI did)
 
-- Instaló el **Agent Workflow Kit** (`Another-DevX/agent-workflow-kit`) localmente con su CLI,
-  registrando `verifyCommand` y `setupCommand` en `.agent-workflow/project.json`.
-- Añadió al `.gitignore` las rutas del workflow para que cada integrante tenga su propia configuración.
-- Mantuvo `AI_USAGE.md` y `prompts/` **versionados** (son obligatorios para el hackatón), a diferencia
-  del kit, que es local.
+- Installed the **Agent Workflow Kit** (`Another-DevX/agent-workflow-kit`) locally with its CLI,
+  recording `verifyCommand` and `setupCommand` in `.agent-workflow/project.json`.
+- Added the workflow paths to `.gitignore` so each contributor keeps their own configuration.
+- Kept `AI_USAGE.md` and `prompts/` **versioned** (they are mandatory for the hackathon), unlike the
+  kit, which is local.

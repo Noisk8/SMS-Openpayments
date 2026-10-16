@@ -1,6 +1,6 @@
-# Prompts — Specs del backend (iteración 1) (2026-10-16)
+# Prompts — Backend specs (iteration 1) (2026-10-16)
 
-## Prompt (texto real, íntegro)
+## Prompt (verbatim, complete)
 
 ````text
 . Objective and scope
@@ -307,22 +307,26 @@ This is the first iteration development spec, please start working on it.
 Remember to parallelize as much as you can, also give me sneak peeks to test the implementation and see the progreess in parallel
 ````
 
-## Plan de la IA (iteración 1)
+## AI plan (iteration 1)
 
-- Perfil: **NORMAL**. Base: `known-good` (`cd9e92b`), HEAD `a9d6c83`.
-- Stack confirmado por el equipo: **Fastify + better-sqlite3 + Zod + Vitest + @interledger/open-payments**.
-- Descomposición en DAG y ejecución por fases (fundación primero, luego verticales en paralelo).
-- Sneak peeks: servidor arrancable + simulador de SMS en modo dev.
+- Profile: **NORMAL**. Base: `known-good` (`cd9e92b`), HEAD `a9d6c83`.
+- Stack confirmed by the team: **Fastify + better-sqlite3 + Zod + Vitest + @interledger/open-payments**.
+- Work decomposed into a DAG and executed in phases (foundation first, then verticals in parallel).
+- Sneak peeks: runnable server + dev SMS simulator.
 
-## Prompt 2 (texto real) — estructura
+## Prompt 2 (verbatim) — structure
 
 ```text
 This iteration would be in a folder / backend
 ```
 
-Decisión: todo el código de esta iteración vive en `backend/`; la raíz queda como contenedor
-(scripts delegados) y conserva `prompts/`, `AI_USAGE.md` y el workflow local de agentes.
+Decision: all code for this iteration lives in `backend/`; the root stays as a container (delegating
+scripts) and keeps `prompts/`, `AI_USAGE.md` and the local agent workflow.
 
-## Resultado (lo que hizo la IA)
+## Outcome (what the AI did)
 
-_(Se completará al integrar cada tarea.)_
+Foundation integrated under `backend/`: Fastify + SQLite schema + Zod config + SMS gateway (signed
+webhook, persistence, deduplication, dev simulator) + persistent job queue + AES-256-GCM encryption,
+with the payments domain boundary frozen in `backend/src/payments/types.ts`. The payments and accounts
+verticals were delegated in parallel to isolated workers; the command service follows after they are
+integrated.
