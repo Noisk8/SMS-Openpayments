@@ -93,6 +93,7 @@ See [`prompts/`](prompts/):
 - [`prompts/2026-10-16-webhook-twilio.md`](prompts/2026-10-16-webhook-twilio.md)
 - [`prompts/2026-10-16-demo-wallet-pool.md`](prompts/2026-10-16-demo-wallet-pool.md)
 - [`prompts/2026-10-16-demo-external-recipient.md`](prompts/2026-10-16-demo-external-recipient.md)
+- [`prompts/2026-10-16-relayion-provider.md`](prompts/2026-10-16-relayion-provider.md)
 
 > Note: update this file whenever AI touches new code.
 
@@ -263,3 +264,23 @@ integraciones, verificó los archivos privados ignorados y preparó la integraci
 los cambios recientes de main antes de subir. Se conserva el historial de prompts
 por las reglas del hackatón; sus referencias antiguas a proveedores no son integraciones
 activas. Los archivos de entorno y las claves permanecen fuera de Git.
+
+## Relayion SMS provider (2026-10-16)
+
+OpenCode (agent; model **DeepSeek V4.1 Flash**), delegated implementation worker on branch
+`task/T-relayion`, added a real SMS provider adapter for Relayion, matching the existing
+`SmsProvider` contract. It verifies inbound webhooks by HMAC-SHA256 over the raw request body,
+fetches the message body through `GET /api/v1/inbound/:id` when the webhook omits it, and sends
+outbound replies through `POST /api/v1/outbound`.
+
+- AI-generated, pending human review: `backend/src/sms/providers/relayion.ts` (new),
+  `backend/src/sms/types.ts` (`rawBody` + async-capable `parseIncoming`), `backend/src/sms/service.ts`
+  (awaits `parseIncoming`), `backend/src/app.ts` (JSON parser preserving `request.rawBody`),
+  `backend/src/sms/provider-factory.ts`, `backend/src/sms/routes.ts` (passes `rawBody`, removes the
+  temporary diagnostics log), `backend/src/config.ts` (Relayion env + `superRefine`),
+  `backend/.env.example` and `backend/docs/relayion.md` (new).
+- Tests: `backend/tests/relayion.test.ts` (new), 15 cases with an injected fake `fetch`; no network.
+- No `frontend/**` file was touched and no migration was edited. The signature check and the
+  provider-error mapping (retryable `PROVIDER_ERROR` vs terminal `VALIDATION_FAILED`) still need a
+  human review against the Relayion console. Prompt recorded verbatim in
+  [`prompts/2026-10-16-relayion-provider.md`](prompts/2026-10-16-relayion-provider.md).

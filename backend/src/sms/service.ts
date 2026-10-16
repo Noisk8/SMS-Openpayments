@@ -52,7 +52,7 @@ export async function receiveInbound(
   if (!provider.validateWebhook(request)) {
     throw new AppError("UNAUTHORIZED", "Firma de webhook inválida.");
   }
-  return persistInboundSms(db, provider.parseIncoming(request));
+  return persistInboundSms(db, await provider.parseIncoming(request));
 }
 
 export async function getInboundSms(db: Db, id: string): Promise<InboundSms | null> {

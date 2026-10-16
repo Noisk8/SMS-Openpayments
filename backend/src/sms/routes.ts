@@ -23,7 +23,11 @@ const simulateSchema = z.object({
 
 export function registerSmsRoutes(app: FastifyInstance, deps: SmsRouteDeps): void {
   app.post("/webhooks/sms", async (request, reply) => {
-    const webhookRequest: WebhookRequest = { headers: request.headers, body: request.body };
+    const webhookRequest: WebhookRequest = {
+      headers: request.headers,
+      body: request.body,
+      rawBody: (request as { rawBody?: string }).rawBody,
+    };
     try {
       await receiveInbound(deps.db, deps.provider, webhookRequest);
       // A duplicate is acknowledged without repeating business effects (spec §5).
@@ -31,11 +35,6 @@ export function registerSmsRoutes(app: FastifyInstance, deps: SmsRouteDeps): voi
       return reply.code(200).send(acknowledgment);
     } catch (error) {
       if (isAppError(error) && error.code === "UNAUTHORIZED") {
-        // Temporary diagnostics: we need the provider's header + payload shape.
-        request.log.warn(
-          { headers: request.headers, body: request.body },
-          "SMS webhook rejected: unauthorized",
-        );
         return reply.code(401).send({ error: "UNAUTHORIZED" });
       }
       if (isAppError(error) && error.code === "VALIDATION_FAILED") {
