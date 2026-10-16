@@ -12,8 +12,10 @@ estas son las variables de entorno del backen para que me crees el usuario
 
 ## Contraseña de pruebas
 
-y una contraseña 1234567 porque esto es solo de prueba
+y una contraseña [contraseña de prueba omitida] porque esto es solo de prueba
 
 ## Acceso directo solicitado
 
-pero en el login necesito ingresar c la contraseña 1234567
+pero en el login necesito ingresar c la contraseña [contraseña de prueba omitida]
+
+[Las contraseñas reales suministradas se omiten del registro versionado, igual que las claves privadas y las variables secretas.]

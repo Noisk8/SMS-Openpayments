@@ -346,7 +346,7 @@ export function onboardingFundingKey(userId: string): string {
  * returns the existing assignment: no new wallet and no new top-up.
  */
 export async function registerWithDemoWallet(
-  deps: Pick<DemoDeps, "config" | "db">,
+  deps: DemoDeps,
   input: DemoRegistrationInput,
 ): Promise<DemoRegistrationResult> {
   if (deps.config.DEMO_WALLET_ASSIGNMENT_ENABLED !== "true") {

@@ -11,7 +11,7 @@ describe("Historial de ingresos de wallet", () => {
   const address = "https://wallet.example/chasky";
   const received = { id: "https://wallet.example/incoming/received", walletAddress: address, completed: true, receivedAmount: { value: "10000", assetCode: "COP", assetScale: 2 }, createdAt: "2026-10-16T20:00:00Z" };
   beforeEach(async () => {
-    db = await testDb();userId = (await createUser({db}, {phone:"+573174899046"})).id;
+    db = await testDb();userId = (await createUser({db}, {phone:"+573001234567"})).id;
     await db.run("INSERT INTO wallets (id, user_id, wallet_address, currency, asset_scale, auth_server, resource_server) VALUES ('wallet', ?, ?, 'COP', 2, 'https://auth.example', 'https://rs.example')", [userId, address]);
     gateway = { supports: vi.fn(() => true), request: vi.fn(async () => ({ status:"PENDING" as const,redirect:"https://auth.example/approve",uri:"https://auth.example/continue",token:"private-continue",wait:5 })), poll:vi.fn(async () => ({token:"private-access",expiresIn:300})),list:vi.fn(async () => ({payments:[received],more:false})) };
     history = new WalletHistory(db, new SecretBox(generateEncryptionKey()), gateway);

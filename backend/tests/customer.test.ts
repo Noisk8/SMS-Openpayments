@@ -125,30 +125,30 @@ describe("Acceso y dashboard Chasky", () => {
 
   it("permite la contraseña de prueba sin marcar el teléfono verificado y la bloquea en producción", async () => {
     await db.run("UPDATE users SET status = 'pending', phone_verified_at = NULL WHERE id = ?", [userId]);
-    await setTestPassword(db, userId, "1234567");
+    await setTestPassword(db, userId, "test-password");
     const config = testConfig({ TEST_PASSWORD_LOGIN_ENABLED: "true" });
-    const login = await passwordLogin(db, config, alice, "1234567", "127.0.0.1");
+    const login = await passwordLogin(db, config, alice, "test-password", "127.0.0.1");
     expect((await sessionUser(db, login.token, true)).status).toBe("pending");
     await expect(sessionUser(db, login.token)).rejects.toThrow();
     const user = await db.get<{ phone_verified_at: string | null }>("SELECT phone_verified_at FROM users WHERE id = ?", [userId]);
     expect(user?.phone_verified_at).toBeNull();
-    await expect(passwordLogin(db, testConfig(), alice, "1234567", "127.0.0.1")).rejects.toThrow("no disponible");
-    await expect(passwordLogin(db, { ...config, NODE_ENV: "production" }, alice, "1234567", "127.0.0.1")).rejects.toThrow("no disponible");
+    await expect(passwordLogin(db, testConfig(), alice, "test-password", "127.0.0.1")).rejects.toThrow("no disponible");
+    await expect(passwordLogin(db, { ...config, NODE_ENV: "production" }, alice, "test-password", "127.0.0.1")).rejects.toThrow("no disponible");
     await expect(passwordLogin(db, config, alice, "wrong-password", "127.0.0.1")).rejects.toThrow("incorrectos");
     const row = await db.get<{ password_hash: string }>("SELECT password_hash FROM web_test_credentials WHERE user_id = ?", [userId]);
-    expect(row?.password_hash).not.toBe("1234567");
+    expect(row?.password_hash).not.toBe("test-password");
     await setTestPassword(db, userId, "new-test-password");
     await expect(sessionUser(db, login.token, true)).rejects.toThrow();
   });
 
   it("limita los intentos de contraseña y rechaza cuentas suspendidas", async () => {
     const config = testConfig({ TEST_PASSWORD_LOGIN_ENABLED: "true" });
-    await setTestPassword(db, userId, "1234567");
+    await setTestPassword(db, userId, "test-password");
     for (let i = 0; i < 10; i++) await expect(passwordLogin(db, config, alice, "bad-test-password", "127.0.0.1")).rejects.toThrow();
-    await expect(passwordLogin(db, config, alice, "1234567", "127.0.0.1")).rejects.toThrow();
+    await expect(passwordLogin(db, config, alice, "test-password", "127.0.0.1")).rejects.toThrow();
     await db.run("DELETE FROM web_login_challenges");
     await db.run("UPDATE users SET status = 'suspended' WHERE id = ?", [userId]);
-    await expect(passwordLogin(db, config, alice, "1234567", "127.0.0.1")).rejects.toThrow();
+    await expect(passwordLogin(db, config, alice, "test-password", "127.0.0.1")).rejects.toThrow();
   });
 
   it("no registra rutas administrativas de las integraciones retiradas", async () => {
