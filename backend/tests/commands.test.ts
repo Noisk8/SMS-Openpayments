@@ -158,6 +158,19 @@ describe("SMS command service", () => {
     expect(unknown.reply).toMatch(/no reconocido/i);
   });
 
+  it("acepta verbos, separador, moneda y alias en minúsculas", async () => {
+    const help = await run("ayuda");
+    expect(help.reply).toContain("Comandos disponibles");
+
+    const prepared = await run("pagar 5000 cop a bob");
+    expect(prepared.reply).toContain("Pago pendiente de confirmación");
+    expect(prepared.reply).toContain("Destino: bob");
+
+    const code = codeFrom(prepared.reply);
+    const cancelled = await run(`cancelar ${code}`);
+    expect(cancelled.state).toBe("CANCELLED");
+  });
+
   it("rechaza remitentes no registrados, no verificados o suspendidos sin crear pagos", async () => {
     const stranger = await run("PAGAR 5000 A bob", "+579999999999");
     expect(stranger.reply).toMatch(/no encontramos/i);
