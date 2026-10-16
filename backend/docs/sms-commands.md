@@ -3,26 +3,28 @@
 Short command interface implemented by the SMS engine
 (`backend/src/sms/command-service.ts`) on top of the Open Payments flow. The
 long commands (`PAGAR`, `CONFIRMAR`, `CANCELAR`, `ESTADO`, `AYUDA`) keep working
-as compatible alternatives; both families share the same rules.
+as compatible alternatives; both families share the same rules. `AYUDA`/`HELP`
+return the same short help as `9`.
 
 Amounts are always in the wallet currency (COP for this deployment), so the
 currency is never repeated in replies.
+
+Destinations are addressed **by alias only**: the SMS interface never shows,
+accepts or requires a recipient number.
 
 ## Commands
 
 | SMS | Action |
 |---|---|
-| `P 1000 2` | Prepare a payment of 1000 to destination 2 |
-| `P 1000 TIENDARUTAN` | Same, using the recipient alias |
+| `P 1000 ANA` | Prepare a payment of 1000 to the recipient alias `ANA` |
 | `4746` | Confirm the pending payment with the received code |
 | `0` | Cancel the pending payment |
 | `1` | Show the last payment |
-| `2` | List destinations |
-| `9` | Show help |
+| `9` / `AYUDA` / `HELP` | Show help |
 
-Input is case-insensitive and tolerates extra spaces. Recipient numbers are only
-meaningful inside `P <amount> <destination>`, so they never collide with the
-commands.
+Input is case-insensitive and tolerates extra spaces. A numeric token is never a
+destination: it would only resolve a recipient whose alias is literally that
+number. `2` is **not** a command.
 
 ## Create a payment (`P`)
 
@@ -35,8 +37,9 @@ Responde 4746 para pagar.
 ```
 
 Nothing is executed until the right code arrives. The code is stored only as a
-salted hash. `P` accepts a recipient `number` or an `alias`; alias matching folds
-case and whitespace so `TIENDARUTAN` matches `Tienda Ruta N`.
+salted hash. `P` accepts a recipient `alias`; matching folds case, trims the
+edges and ignores inner whitespace, so `TIENDARUTAN` matches `Tienda Ruta N`.
+Recipients are per user: an alias that belongs to someone else never resolves.
 
 MVP amounts are **positive integers in major units** (`1000` = 1000 COP). Dots,
 commas, signs and amounts over the ceiling (`MVP_MAX_AMOUNT_MAJOR`) are rejected.
@@ -55,20 +58,6 @@ When the provider confirms settlement the reply is `Pago confirmado: 1000 a
 Tienda Ruta N.`. Confirmation is atomic: the payment is claimed with a
 conditional `UPDATE`, so repeating the code (or a concurrent duplicate) never
 debits twice.
-
-## Destinations (`2`)
-
-```
-Destinos:
-1 Ana
-2 Tienda Ruta N
-3 Juan
-Para pagar: P 1000 2
-```
-
-Numbers are **permanent**: assigned once at creation from a per-user monotonic
-counter (`recipient_counters`) and never reordered or reused after deletion, so a
-number can never point at the wrong destination. Each user has their own list.
 
 ## Cancel (`0`) and status (`1`)
 
@@ -89,21 +78,25 @@ Usa el codigo de tu SMS original o envia 0 para cancelar.
 The code is never repeated: only its hash is stored, so a pending payment tells
 the user to reuse the original SMS.
 
-## Help (`9`)
+## Help (`9`, `AYUDA`, `HELP`)
 
 ```
-P 1000 2: pagar
+P 1000 ANA: pagar
 Codigo recibido: confirmar
 0: cancelar
 1: ultimo pago
-2: destinos
 9: ayuda
 ```
+
+The help never mentions a destination list: there is none.
 
 ## Rules
 
 - The sender must be registered, verified and active.
 - Amounts use the wallet currency; it is shown implicitly (never in the text).
+- Destinations resolve by alias only (case- and whitespace-insensitive); the
+  `recipients.number` column and `recipient_counters` are no longer part of the
+  SMS interface.
 - One pending payment per user.
 - 4-digit confirmation codes, 5-minute expiry, at most 5 failed attempts.
 - A lapsed code expires the payment automatically and allows creating another.
@@ -117,8 +110,8 @@ Codigo recibido: confirmar
 
 | Case | Reply |
 |---|---|
-| Wrong format | `Formato: P 1000 2. Envia 2 para ver destinos.` |
-| Unknown destination | `Destino no encontrado. Envia 2 para ver destinos.` |
+| Wrong format | `Formato: P 1000 ANA. 9 para ayuda.` |
+| Unknown destination | `Destino no encontrado. 9 para ayuda.` |
 | Pending payment | `Ya tienes un pago pendiente. Usa su codigo o envia 0 para cancelar.` |
 | Wrong code | `Codigo incorrecto. Quedan N intentos.` |
 | Expired code | `El pago vencio. Crea otro con P monto destino.` |
