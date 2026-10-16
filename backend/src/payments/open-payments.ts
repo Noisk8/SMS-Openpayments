@@ -428,10 +428,14 @@ function mapClientError(operation: string, error: OpenPaymentsClientError): AppE
   if (error.status === 401) {
     return new AppError("UNAUTHORIZED", `No autorizado en ${operation}.`, { code: error.code });
   }
-  return new AppError("PROVIDER_ERROR", `Error de Open Payments en ${operation}: ${error.description}`, {
-    status: error.status,
-    code: error.code,
-  });
+  return new AppError(
+    "PROVIDER_ERROR",
+    `Error de Open Payments en ${operation}: ${error.description ?? error.message} (status ${error.status ?? "?"}, code ${error.code ?? "-"})`,
+    {
+      status: error.status,
+      code: error.code,
+    },
+  );
 }
 
 function errorMessage(error: unknown): string {
