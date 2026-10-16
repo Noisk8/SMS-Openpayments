@@ -1,42 +1,37 @@
 import type { AppConfig } from "../config";
 import type { Db } from "../db";
+import { HELP_TEXT, UNKNOWN_COMMAND_REPLY, parseCommand } from "./command-service";
 import type { InboundSms, SmsProvider } from "./types";
 
+/** Dependencies available to the legacy synchronous entry (dev SMS simulator). */
 export interface CommandContext {
   db: Db;
   config: AppConfig;
   provider: SmsProvider;
 }
 
-export interface CommandOutcome {
-  reply: string;
-}
+export type { CommandOutcome } from "./command-service";
+export { HELP_TEXT };
 
-export const HELP_TEXT = [
-  "Comandos disponibles:",
-  "PAGAR <monto> [MONEDA] A <alias>",
-  "CONFIRMAR <codigo>",
-  "CANCELAR <codigo>",
-  "ESTADO <referencia>",
-  "AYUDA",
-].join("\n");
+const ASYNC_ONLY_REPLY =
+  "Este comando se procesa en segundo plano. Recibirás la respuesta por SMS en unos segundos.";
 
 /**
- * Punto de entrada del servicio de comandos.
- * Iteración 1: parser mínimo con AYUDA funcional y el resto como marcador;
- * la lógica de pagos y confirmaciones se implementa en la vertical de pagos.
+ * Synchronous, transport-only entry used by the dev SMS simulator.
+ *
+ * The command engine that prepares payments, validates confirmation codes and
+ * manages grants lives in `./command-service` and runs through the
+ * `process_inbound_sms` job handler, which has the payment provider and secret
+ * box. This entry only resolves the stateless commands so the simulator can
+ * answer immediately; payment commands are handled asynchronously by that handler.
  */
-export function handleInboundCommand(_ctx: CommandContext, sms: InboundSms): CommandOutcome {
-  const verb = (sms.text.trim().split(/\s+/)[0] ?? "").toUpperCase();
-  switch (verb) {
-    case "AYUDA":
-      return { reply: HELP_TEXT };
-    case "PAGAR":
-    case "CONFIRMAR":
-    case "CANCELAR":
-    case "ESTADO":
-      return { reply: `${verb}: funcion en construccion (iteracion 1).` };
-    default:
-      return { reply: "Comando no reconocido. Escribe AYUDA." };
+export function handleInboundCommand(_ctx: CommandContext, sms: InboundSms): { reply: string } {
+  const parsed = parseCommand(sms.text);
+  if (parsed.kind === "help") {
+    return { reply: HELP_TEXT };
   }
+  if (parsed.kind === "unknown") {
+    return { reply: UNKNOWN_COMMAND_REPLY };
+  }
+  return { reply: ASYNC_ONLY_REPLY };
 }
