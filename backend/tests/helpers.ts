@@ -9,6 +9,8 @@ const DOMAIN_TABLES = [
   "managed_journals",
   "managed_transfers",
   "managed_accounts",
+  "demo_assignments",
+  "demo_wallet_pool",
   "users",
   "wallets",
   "recipients",

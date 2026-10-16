@@ -206,18 +206,24 @@ export class FakePaymentProvider implements PaymentProvider {
   async createQuote(input: {
     wallet: WalletMetadata;
     receiver: string;
-    debitAmount: Amount;
+    debitAmount?: Amount;
+    receiveAmount?: Amount;
     accessToken?: string;
   }): Promise<Quote> {
     const wallet = this.requireWallet(input.wallet.walletAddress);
     const id = `${wallet.metadata.walletAddress}/quotes/${this.nextId("quote")}`;
-    // El proveedor falso no aplica conversión cruzada: recibe lo mismo que debita.
+    // El proveedor falso no aplica conversión cruzada: el importe indicado
+    // (débito o recepción) se refleja igual en ambos lados.
+    const amount = input.debitAmount ?? input.receiveAmount;
+    if (!amount) {
+      throw new AppError("VALIDATION_FAILED", "createQuote requiere debitAmount o receiveAmount.");
+    }
     const quote: FakeQuote = {
       id,
       walletAddress: wallet.metadata.walletAddress,
       receiver: input.receiver,
-      debitAmount: input.debitAmount,
-      receiveAmount: { ...input.debitAmount },
+      debitAmount: { ...amount },
+      receiveAmount: { ...amount },
       expiresAt: new Date(this.now().getTime() + this.quoteTtlMs).toISOString(),
     };
     this.quotes.set(id, quote);

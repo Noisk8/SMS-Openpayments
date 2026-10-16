@@ -45,6 +45,8 @@ export interface PaymentSnapshot {
   quoteExpiresAt: string | null;
   incomingPaymentId: string | null;
   outgoingPaymentId: string | null;
+  /** Domain that originated the payment (`SMS` transfers, `DEMO_TOPUP`, ...). */
+  purpose: string;
   lastError: string | null;
   createdAt: string;
   updatedAt: string;
@@ -59,10 +61,14 @@ export interface PreparePaymentInput {
   /** Wallet address del receptor ya resuelta (alias/teléfono/wallet explícita). */
   recipientWalletAddress: string;
   /** Importe solicitado en la escala del wallet de origen. */
-  debitAmount: Amount;
+  debitAmount?: Amount;
+  /** Importe alternativo a recibir por el destino (se cotiza por recepción). */
+  receiveAmount?: Amount;
   recipientId?: string | null;
   reference?: string;
   idempotencyKey?: string;
+  /** Free-form purpose label; defaults to `SMS`. */
+  purpose?: string;
 }
 
 export interface ExecutePaymentInput {
@@ -90,6 +96,7 @@ interface PaymentRow {
   quote_expires_at: string | null;
   incoming_payment_id: string | null;
   outgoing_payment_id: string | null;
+  purpose: string;
   last_error: string | null;
   idempotency_key: string | null;
   created_at: string;
@@ -128,8 +135,17 @@ export async function preparePayment(
     }
   }
 
+  const debitInput = input.debitAmount;
+  const receiveInput = input.receiveAmount;
+  if ((debitInput && receiveInput) || (!debitInput && !receiveInput)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      "preparePayment requiere exactamente uno de debitAmount o receiveAmount.",
+    );
+  }
+
   const senderWallet = await provider.getWalletMetadata(input.senderWalletAddress);
-  if (!sameAsset(input.debitAmount, senderWallet)) {
+  if (debitInput && !sameAsset(debitInput, senderWallet)) {
     throw new AppError(
       "VALIDATION_FAILED",
       `El importe no coincide con el activo del wallet (${senderWallet.currency}@${senderWallet.assetScale}).`,
@@ -137,12 +153,20 @@ export async function preparePayment(
     );
   }
   const recipientWallet = await provider.getWalletMetadata(input.recipientWalletAddress);
+  if (receiveInput && !sameAsset(receiveInput, recipientWallet)) {
+    throw new AppError(
+      "VALIDATION_FAILED",
+      `El importe a recibir no coincide con el activo del destino (${recipientWallet.currency}@${recipientWallet.assetScale}).`,
+      { currency: recipientWallet.currency, assetScale: recipientWallet.assetScale },
+    );
+  }
 
   const incoming = await provider.createIncomingPayment({ wallet: recipientWallet });
   const quote = await provider.createQuote({
     wallet: senderWallet,
     receiver: incoming.id,
-    debitAmount: input.debitAmount,
+    ...(debitInput ? { debitAmount: debitInput } : {}),
+    ...(receiveInput ? { receiveAmount: receiveInput } : {}),
   });
 
   const id = randomUUID();
@@ -154,8 +178,8 @@ export async function preparePayment(
          id, reference, sender_user_id, sender_wallet_id, recipient_id, recipient_wallet_address,
          state, debit_value, debit_currency, debit_scale,
          receive_value, receive_currency, receive_scale,
-         quote_id, quote_expires_at, incoming_payment_id, idempotency_key, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, 'AWAITING_CONFIRMATION', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         quote_id, quote_expires_at, incoming_payment_id, idempotency_key, purpose, created_at, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, 'AWAITING_CONFIRMATION', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         reference,
@@ -173,6 +197,7 @@ export async function preparePayment(
         quote.expiresAt,
         incoming.id,
         input.idempotencyKey ?? null,
+        input.purpose ?? "SMS",
         now,
         now,
       ],
@@ -428,6 +453,7 @@ function toSnapshot(row: PaymentRow): PaymentSnapshot {
     quoteExpiresAt: row.quote_expires_at,
     incomingPaymentId: row.incoming_payment_id,
     outgoingPaymentId: row.outgoing_payment_id,
+    purpose: row.purpose,
     lastError: row.last_error,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

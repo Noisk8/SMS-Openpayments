@@ -91,6 +91,7 @@ See [`prompts/`](prompts/):
 - [`prompts/2026-10-16-entorno-testnet.md`](prompts/2026-10-16-entorno-testnet.md)
 - [`prompts/2026-10-16-integracion-rafiki.md`](prompts/2026-10-16-integracion-rafiki.md)
 - [`prompts/2026-10-16-webhook-twilio.md`](prompts/2026-10-16-webhook-twilio.md)
+- [`prompts/2026-10-16-demo-wallet-pool.md`](prompts/2026-10-16-demo-wallet-pool.md)
 
 > Note: update this file whenever AI touches new code.
 
@@ -111,3 +112,20 @@ Codex revisó el hallazgo de Generic Password y simplificó la referencia obliga
 `RAFIKI_DB_PASSWORD` en `infra/rafiki/compose.yaml`. El valor sigue procediendo del
 entorno privado; el texto señalado era el mensaje de error de Compose, no una contraseña.
 Los demás archivos de aplicación no se modificaron en esta corrección.
+
+## Demo wallet pool (2026-10-16)
+
+Delegated implementation worker. All AI-built files for this feature are listed in the prompt log
+[`prompts/2026-10-16-demo-wallet-pool.md`](prompts/2026-10-16-demo-wallet-pool.md).
+
+- AI-generated: `backend/src/demo/**` (pool repository, service and routes),
+  `backend/src/db/migrations/004_demo_wallet_pool.sql`, the demo additions to
+  `backend/src/config.ts`, `backend/src/errors.ts`, `backend/src/payments/**`,
+  `backend/src/onboarding/routes.ts`, `backend/src/onboarding/service.ts`,
+  `backend/src/jobs/**` and `backend/src/app.ts`, plus `backend/tests/demo-wallet-pool.test.ts`,
+  `backend/tests/config.test.ts`, `backend/docs/demo-wallet-pool.md` and `backend/.env.example`.
+- Little or no AI: the money-moving Open Payments adapter (`backend/src/payments/open-payments.ts`)
+  and the payment/reconciliation state machine only received additive, small changes (receive-side
+  quotes, a `purpose` label); they still need a human read-through before real use.
+- The team must review the treasury-grant handling and the reconciliation rules by hand.
+

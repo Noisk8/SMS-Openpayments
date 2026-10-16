@@ -144,7 +144,8 @@ export class OpenPaymentsProvider implements PaymentProvider {
   async createQuote(input: {
     wallet: WalletMetadata;
     receiver: string;
-    debitAmount: Amount;
+    debitAmount?: Amount;
+    receiveAmount?: Amount;
     accessToken?: string;
   }): Promise<Quote> {
     return this.withProviderErrors("createQuote", async () => {
@@ -156,16 +157,15 @@ export class OpenPaymentsProvider implements PaymentProvider {
           actions: [AccessAction.Create],
           identifier: input.wallet.walletAddress,
         }));
-      const quote = await client.quote.create(
-        { url: input.wallet.resourceServer, accessToken },
-        {
-          walletAddress: input.wallet.walletAddress,
-          receiver: input.receiver,
-          method: "ilp",
-          // debitAmount se expresa en la escala del wallet de origen.
-          debitAmount: toOpAmount(input.debitAmount),
-        },
-      );
+      // The quote can be pinned to either side; the API takes exactly one amount.
+      if (!input.debitAmount && !input.receiveAmount) {
+        throw new AppError("VALIDATION_FAILED", "createQuote requiere debitAmount o receiveAmount.");
+      }
+      const target = { walletAddress: input.wallet.walletAddress, receiver: input.receiver, method: "ilp" as const };
+      const args = { url: input.wallet.resourceServer, accessToken };
+      const quote = input.debitAmount
+        ? await client.quote.create(args, { ...target, debitAmount: toOpAmount(input.debitAmount) })
+        : await client.quote.create(args, { ...target, receiveAmount: toOpAmount(input.receiveAmount!) });
       return mapQuote(quote);
     });
   }

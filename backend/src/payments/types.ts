@@ -81,7 +81,9 @@ export interface PaymentProvider extends WalletDirectory {
   createQuote(input: {
     wallet: WalletMetadata;
     receiver: string;
-    debitAmount: Amount;
+    /** Exactly one of `debitAmount` / `receiveAmount` must be provided. */
+    debitAmount?: Amount;
+    receiveAmount?: Amount;
     accessToken?: string;
   }): Promise<Quote>;
   /** Grant interactivo para outgoing-payment, con el límite del quote. */

@@ -6,6 +6,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import type { AppConfig } from "./config";
 import type { Db } from "./db";
+import { registerDemoRoutes } from "./demo/routes";
 import { httpStatusFor, isAppError } from "./errors";
 import { registerDevRoutes } from "./dev/routes";
 import { registerGrantRoutes } from "./grants/routes";
@@ -65,6 +66,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     registerOnboardingRoutes(app, paymentsDeps);
     registerRecipientRoutes(app, paymentsDeps);
     registerGrantRoutes(app, paymentsDeps);
+    registerDemoRoutes(app, paymentsDeps);
 
     if (deps.config.NODE_ENV !== "production") {
       registerDevRoutes(app, { config: deps.config, paymentProvider: deps.paymentProvider });

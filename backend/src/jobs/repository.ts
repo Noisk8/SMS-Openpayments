@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Db } from "../db";
+import type { Db, Queryable } from "../db";
 import { isUniqueViolation } from "../db/errors";
 import type { JobStatus } from "../domain";
 import { isoPlusMs, nowIso } from "../util/time";
@@ -28,7 +28,7 @@ export interface EnqueueInput {
   maxAttempts?: number;
 }
 
-export async function enqueueJob(db: Db, input: EnqueueInput): Promise<void> {
+export async function enqueueJob(db: Queryable, input: EnqueueInput): Promise<void> {
   const now = nowIso();
   try {
     await db.run(

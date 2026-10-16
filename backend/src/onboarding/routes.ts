@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import type { AppConfig } from "../config";
 import type { Db } from "../db";
+import { registerWithDemoWallet } from "../demo/service";
 import type { PaymentProvider } from "../payments/types";
 import { requireAdmin } from "../security/authentication";
 import type { SecretBox } from "../security/encryption";
@@ -22,7 +23,11 @@ export interface OnboardingRouteDeps {
 
 const userIdParams = z.object({ id: z.string().min(1) });
 
-const createUserSchema = z.object({ phone: z.string().min(1) });
+const createUserSchema = z.object({
+  phone: z.string().min(1),
+  /** Explicit demo mode: reserve a pre-created wallet and fund it once. */
+  assignDemoWallet: z.boolean().optional(),
+});
 
 const verifyPhoneSchema = z.object({ code: z.string().min(4).max(10) });
 
@@ -48,6 +53,20 @@ export function registerOnboardingRoutes(app: FastifyInstance, deps: OnboardingR
 
   app.post("/admin/users", { preHandler: admin }, async (request, reply) => {
     const body = createUserSchema.parse(request.body);
+    if (body.assignDemoWallet === true) {
+      const result = await registerWithDemoWallet(deps, { phone: body.phone });
+      return reply.code(result.createdAssignment ? 201 : 200).send({
+        user: result.user,
+        demo: {
+          customerId: result.user.id,
+          assignmentId: result.assignment.id,
+          walletAddress: result.assignment.wallet_address,
+          registrationStatus: result.user.status,
+          fundingStatus: result.assignment.funding_status,
+          authorizationStatus: result.assignment.authorization_status,
+        },
+      });
+    }
     const user = await createUser(deps, body);
     return reply.code(201).send({ user });
   });
