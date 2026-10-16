@@ -32,10 +32,22 @@ const envSchema = z
   TWILIO_WEBHOOK_URL: z.string().default(""),
 })
   .superRefine((config, ctx) => {
-    if (config.SMS_PROVIDER !== "twilio") return;
-    for (const key of ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_WEBHOOK_URL"] as const) {
-      if (!config[key]) {
-        ctx.addIssue({ code: "custom", path: [key], message: `${key} es obligatoria con SMS_PROVIDER=twilio` });
+    if (config.PAYMENT_PROVIDER === "openpayments") {
+      for (const key of ["OP_CLIENT_WALLET_ADDRESS", "OP_KEY_ID", "OP_PRIVATE_KEY_PATH"] as const) {
+        if (!config[key]) {
+          ctx.addIssue({
+            code: "custom",
+            path: [key],
+            message: `${key} es obligatoria con PAYMENT_PROVIDER=openpayments`,
+          });
+        }
+      }
+    }
+    if (config.SMS_PROVIDER === "twilio") {
+      for (const key of ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_WEBHOOK_URL"] as const) {
+        if (!config[key]) {
+          ctx.addIssue({ code: "custom", path: [key], message: `${key} es obligatoria con SMS_PROVIDER=twilio` });
+        }
       }
     }
   });

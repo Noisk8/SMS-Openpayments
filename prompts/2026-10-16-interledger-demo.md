@@ -71,3 +71,23 @@ I'm trying to run this demo, please check if it's possible and iterate over it, 
   Railway); authorisation to write the key to a git-ignored file and enable `openpayments`.
 - The Open Payments integration has never run against the real network, so it may need one or two iterations.
 - The "PostgreSQL vs SQLite" item is already resolved: the team explicitly approved moving to Postgres.
+
+## Prompt 2 (verbatim) — keyId answer
+
+```text
+$ilp.interledger-test.dev/nidea
+```
+
+That is the **wallet address**, not the `keyId`. The `keyId` is a separate identifier the wallet
+returns when a public key is registered. The AI generated the Ed25519 public key from the provided
+private key so the team can register it and read the `keyId`:
+
+```text
+6pLz6Bi0GDWlbi2s6E8juo1PGAKGy5CclBhZSRHvWTc=
+```
+
+## Integration note
+
+A parallel session pushed (PR #1) a Twilio SMS adapter and a Test Wallet preflight
+(`6498db7`, `112231b`). The mock-SMS duplicate-id fix was rebased on top and pushed as `b027344`.
+The suite passes with 46 tests.
