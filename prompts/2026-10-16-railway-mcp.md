@@ -15,6 +15,12 @@ Btw, we want to deploy the backend on Railway,
 Install this
 ```
 
+## Prompt 2 (verbatim)
+
+```text
+done!, railway connected, deploy the backend there!
+```
+
 ## Outcome (what the AI did)
 
 - Installed the **Railway MCP server** with the OpenCode CLI (`opencode mcp add railway --global --url https://mcp.railway.com`), which preserves unrelated configuration and writes the V2 config shape.

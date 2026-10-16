@@ -141,6 +141,6 @@ export function getRecipientById(db: Db, id: string): RecipientRow | undefined {
 
 export function getRecipientByAlias(db: Db, userId: string, alias: string): RecipientRow | undefined {
   return db
-    .prepare("SELECT * FROM recipients WHERE user_id = ? AND alias = ?")
-    .get(userId, alias) as RecipientRow | undefined;
+    .prepare("SELECT * FROM recipients WHERE user_id = ? AND alias = ? COLLATE NOCASE")
+    .get(userId, alias.trim()) as RecipientRow | undefined;
 }

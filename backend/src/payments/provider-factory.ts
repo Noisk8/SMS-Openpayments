@@ -15,9 +15,12 @@ export function createPaymentProvider(config: AppConfig): PaymentProvider {
 
   switch (config.PAYMENT_PROVIDER) {
     case "fake":
+      // Local mode: grants are granted immediately so onboarding + payments work
+      // without an interactive wallet callback. Interactive flows are covered by tests.
       return new FakePaymentProvider({
         defaultWalletBalance: { value: "1000000", currency, assetScale },
         defaultGrantLimit: { value: "1000000", currency, assetScale },
+        nonInteractiveGrant: true,
       });
     case "openpayments":
       return OpenPaymentsProvider.fromConfig(config);
