@@ -36,6 +36,11 @@ export function registerSmsRoutes(app: FastifyInstance, deps: SmsRouteDeps): voi
       return reply.code(200).send(acknowledgment);
     } catch (error) {
       if (isAppError(error) && error.code === "UNAUTHORIZED") {
+        // Temporary diagnostics: we need the provider's header + payload shape.
+        request.log.warn(
+          { headers: request.headers, body: request.body },
+          "SMS webhook rejected: unauthorized",
+        );
         return reply.code(401).send({ error: "UNAUTHORIZED" });
       }
       if (isAppError(error) && error.code === "VALIDATION_FAILED") {
