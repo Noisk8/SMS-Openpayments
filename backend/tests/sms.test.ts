@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app";
 import type { Db } from "../src/db";
 import { MockSmsProvider } from "../src/sms/providers/mock";
-import { testConfig, testDb } from "./helpers";
+import { testConfig, testDb, testPaymentProvider } from "./helpers";
 
 const inboundPayload = {
   messageId: "msg-1",
@@ -20,7 +20,7 @@ describe("webhook SMS", () => {
     const config = testConfig();
     db = testDb();
     provider = new MockSmsProvider(config.SMS_WEBHOOK_SECRET);
-    app = buildApp({ config, db, provider });
+    app = buildApp({ config, db, provider, paymentProvider: testPaymentProvider(), secretBox: null });
   });
 
   afterEach(async () => {

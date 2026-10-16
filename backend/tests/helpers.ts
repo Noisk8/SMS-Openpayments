@@ -1,5 +1,6 @@
 import { loadConfig, type AppConfig } from "../src/config";
 import { createDatabase, type Db } from "../src/db";
+import { FakePaymentProvider } from "../src/payments/fake";
 import { MockSmsProvider } from "../src/sms/providers/mock";
 
 export function testConfig(overrides: Partial<NodeJS.ProcessEnv> = {}): AppConfig {
@@ -16,4 +17,8 @@ export function testDb(): Db {
 
 export function testProvider(config: AppConfig): MockSmsProvider {
   return new MockSmsProvider(config.SMS_WEBHOOK_SECRET);
+}
+
+export function testPaymentProvider(): FakePaymentProvider {
+  return new FakePaymentProvider();
 }
