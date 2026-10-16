@@ -16,7 +16,7 @@ export interface DemoRouteDeps {
 
 const importSchema = z.object({
   treasury: z.string().url(),
-  customers: z.array(z.string().url()).length(9, "Se requieren exactamente 9 wallets de cliente"),
+  customers: z.array(z.string().url()).min(1, "Se requiere al menos una wallet de cliente"),
 });
 
 const userIdParams = z.object({ id: z.string().min(1) });
