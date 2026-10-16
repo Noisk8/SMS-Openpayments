@@ -1,3 +1,4 @@
+import formbody from "@fastify/formbody";
 import Fastify, { type FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import type { AppConfig } from "./config";
@@ -26,6 +27,9 @@ export interface AppDeps {
 /** Builds the Fastify app without starting the listener (testable via inject). */
 export function buildApp(deps: AppDeps): FastifyInstance {
   const app = Fastify({ logger: deps.config.NODE_ENV !== "test" });
+
+  // Twilio sends webhooks as application/x-www-form-urlencoded.
+  app.register(formbody);
 
   app.get("/health", async () => {
     await deps.db.get("SELECT 1");

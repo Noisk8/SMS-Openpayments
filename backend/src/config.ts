@@ -1,7 +1,8 @@
 import "dotenv/config";
 import { z } from "zod";
 
-const envSchema = z.object({
+const envSchema = z
+  .object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3000),
   PUBLIC_BASE_URL: z.string().default("http://localhost:3000"),
@@ -21,10 +22,23 @@ const envSchema = z.object({
   OP_KEY_ID: z.string().default(""),
   OP_PRIVATE_KEY_PATH: z.string().default(""),
 
-  SMS_PROVIDER: z.enum(["mock"]).default("mock"),
+  SMS_PROVIDER: z.enum(["mock", "twilio"]).default("mock"),
   SMS_FROM: z.string().min(1).default("+570000000000"),
   SMS_WEBHOOK_SECRET: z.string().default("dev-webhook-secret"),
-});
+
+  // Twilio (SMS_PROVIDER=twilio). TWILIO_WEBHOOK_URL is the public URL Twilio calls, byte for byte.
+  TWILIO_ACCOUNT_SID: z.string().default(""),
+  TWILIO_AUTH_TOKEN: z.string().default(""),
+  TWILIO_WEBHOOK_URL: z.string().default(""),
+})
+  .superRefine((config, ctx) => {
+    if (config.SMS_PROVIDER !== "twilio") return;
+    for (const key of ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_WEBHOOK_URL"] as const) {
+      if (!config[key]) {
+        ctx.addIssue({ code: "custom", path: [key], message: `${key} es obligatoria con SMS_PROVIDER=twilio` });
+      }
+    }
+  });
 
 export type AppConfig = z.infer<typeof envSchema>;
 

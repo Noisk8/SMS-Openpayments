@@ -21,5 +21,7 @@ AI Policy. One file per topic/session.
 - [`2026-10-16-integracion-rafiki.md`](2026-10-16-integracion-rafiki.md) — Rafiki integration status
   review and repository integration with `origin/main`.
 - [`2026-10-16-webhook-twilio.md`](2026-10-16-webhook-twilio.md) — SMS webhook and Twilio adapter.
+- [`2026-10-16-testwallet-open-payments.md`](2026-10-16-testwallet-open-payments.md) — Test Wallet
+  configuration for the Open Payments model, preflight script and Twilio adapter.
 
 Convention: `YYYY-MM-DD-topic.md`, with the prompt exactly as sent plus the relevant team answers.
