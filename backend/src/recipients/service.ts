@@ -190,7 +190,8 @@ export async function getRecipientByNumber(
 /**
  * Resolves an SMS destination to a recipient by its permanent number (`2`) or by
  * its alias (`TIENDARUTAN`). Alias matching folds case and whitespace so a name
- * like `Tienda Ruta N` can be typed without spaces from an SMS.
+ * like `Tienda Ruta N` can be typed without spaces from an SMS. Aliases are
+ * global, so a destination registered by another user still resolves.
  */
 export async function getRecipientByDestination(
   db: Db,
@@ -205,10 +206,23 @@ export async function getRecipientByDestination(
   const own = (await listRecipients(db, userId)).find(
     (recipient) => normalizeAlias(recipient.alias) === target,
   );
-  if (own) {
-    return own;
+  return own ?? (await getGlobalRecipientByAlias(db, value));
+}
+
+/**
+ * Finds an alias across **every** user's recipients, oldest row first. Destinations
+ * are global: a registered alias can be paid by any sender. Callers that have the
+ * sender's own copy must prefer it, so their stored address wins over someone
+ * else's copy of the same name.
+ */
+export async function getGlobalRecipientByAlias(
+  db: Db,
+  alias: string,
+): Promise<RecipientRow | undefined> {
+  const target = normalizeAlias(alias);
+  if (target.length === 0) {
+    return undefined;
   }
-  // Aliases are global: a registered destination can be paid by any sender.
   const all = await db.all<RecipientRow>(`SELECT * FROM recipients ORDER BY created_at ASC`);
   return all.find((recipient) => normalizeAlias(recipient.alias) === target);
 }

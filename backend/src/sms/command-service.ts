@@ -22,6 +22,7 @@ import {
   type WalletRow,
 } from "../onboarding/service";
 import {
+  getGlobalRecipientByAlias,
   getRecipientByAlias,
   listRecipients,
   type RecipientRow,
@@ -662,12 +663,15 @@ function describeState(state: PaymentState): string {
 // --- Destination resolution -------------------------------------------------
 
 /**
- * Resolves an SMS destination to one of the user's recipients **by alias only**.
+ * Resolves an SMS destination to a recipient **by alias only**.
  *
  * Matching folds case, trims the edges and ignores inner whitespace, so
  * `tiendarutan` and `Tienda Ruta N` reach the same recipient. A numeric token is
  * just an alias that happens to be a number: it never resolves a recipient's
  * `number`, which the SMS interface no longer exposes.
+ *
+ * The sender's own recipients win; otherwise the alias is looked up globally,
+ * because destinations are shared: any sender can pay any registered alias.
  */
 async function resolveRecipientByAlias(
   db: Db,
@@ -684,7 +688,8 @@ async function resolveRecipientByAlias(
   }
   const key = foldAlias(alias);
   const recipients = await listRecipients(db, userId);
-  return recipients.find((recipient) => foldAlias(recipient.alias) === key);
+  const own = recipients.find((recipient) => foldAlias(recipient.alias) === key);
+  return own ?? (await getGlobalRecipientByAlias(db, alias));
 }
 
 /** Case- and whitespace-insensitive alias key for SMS matching. */

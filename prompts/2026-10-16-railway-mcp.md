@@ -37,10 +37,12 @@ to **PostgreSQL** (Railway-hosted), shared by the local backend and the deployed
 ## Prompt 4 (verbatim)
 
 ```text
-ea81e746d3cd8bc4832d8acb8423604b164e5616bf746dc35e9430c7ee95325a THIS IS A HACKATHON, API KEYS DOESNT MATTER, use this as the encryption key
+[REDACTED 2026-10-17 — 64-hex `ENCRYPTION_KEY` value. The prompt asked to use the
+given string as the encryption key; the literal value lives only in `.env`
+(git-ignored) and Railway variables] THIS IS A HACKATHON, API KEYS DOESNT MATTER, use this as the encryption key
 ```
 
-Decision: this 64-hex-character value is the `ENCRYPTION_KEY` for local and Railway. `SecretBox`
+Decision: that 64-hex-character value is the `ENCRYPTION_KEY` for local and Railway. `SecretBox`
 now accepts a 32-byte key as either 64 hex characters or base64. Secrets are not treated as
 sensitive for this hackathon, but they are still kept in `.env` (git-ignored) and Railway variables.
 

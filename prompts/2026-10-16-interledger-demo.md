@@ -20,7 +20,8 @@ Pásame la Wallet Address destinataria, el keyId y la ruta local del archivo de 
 
 Aca quiero enviar: $ilp.interledger-test.dev/otherwallet
 Esta es la PK de nidea -----BEGIN PRIVATE KEY-----
-MC4CAQAwBQYDK2VwBCIEIF1qn1t9r36ClkvMsw0sewX9hStKQUiTJCiQVorl6aiL
+[REDACTED 2026-10-17 — application signing key; it lives only in the private
+environment (`OP_PRIVATE_KEY_PATH`) and Railway variables, never in Git]
 -----END PRIVATE KEY-----
 (DA IGUAL ES UNA CUENTA DE TESTING)
 

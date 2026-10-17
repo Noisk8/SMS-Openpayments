@@ -82,7 +82,6 @@ See [`prompts/`](prompts/):
 - [`prompts/2026-10-16-reinicio-y-sdk.md`](prompts/2026-10-16-reinicio-y-sdk.md)
 - [`prompts/2026-10-16-divulgacion-ia.md`](prompts/2026-10-16-divulgacion-ia.md)
 - [`prompts/2026-10-16-workflow-agentes.md`](prompts/2026-10-16-workflow-agentes.md)
-- [`prompts/2026-10-16-cierre-bootstrap.md`](prompts/2026-10-16-cierre-bootstrap.md)
 - [`prompts/2026-10-16-specs-backend.md`](prompts/2026-10-16-specs-backend.md)
 - [`prompts/2026-10-16-english-convention.md`](prompts/2026-10-16-english-convention.md)
 - [`prompts/2026-10-16-alcance-cop.md`](prompts/2026-10-16-alcance-cop.md)
@@ -95,6 +94,24 @@ See [`prompts/`](prompts/):
 - [`prompts/2026-10-16-demo-external-recipient.md`](prompts/2026-10-16-demo-external-recipient.md)
 - [`prompts/2026-10-16-relayion-provider.md`](prompts/2026-10-16-relayion-provider.md)
 - [`prompts/2026-10-16-mvp-comandos-sms.md`](prompts/2026-10-16-mvp-comandos-sms.md)
+- [`prompts/2026-10-16-rotacion-grant.md`](prompts/2026-10-16-rotacion-grant.md)
+- [`prompts/2026-10-16-railway-mcp.md`](prompts/2026-10-16-railway-mcp.md)
+- [`prompts/2026-10-16-movimientos-wallet.md`](prompts/2026-10-16-movimientos-wallet.md)
+- [`prompts/2026-10-16-saldo-wallet.md`](prompts/2026-10-16-saldo-wallet.md)
+- [`prompts/2026-10-16-retirar-integraciones.md`](prompts/2026-10-16-retirar-integraciones.md)
+- [`prompts/2026-10-16-asociar-wallet-chasky.md`](prompts/2026-10-16-asociar-wallet-chasky.md)
+- [`prompts/2026-10-16-chasky-dashboard.md`](prompts/2026-10-16-chasky-dashboard.md)
+- [`prompts/2026-10-16-publicar-frontend-rafiki.md`](prompts/2026-10-16-publicar-frontend-rafiki.md)
+- [`prompts/2026-10-16-publicar-chasky.md`](prompts/2026-10-16-publicar-chasky.md)
+- [`prompts/2026-10-16-eliminar-ramas-rafiki-twilio.md`](prompts/2026-10-16-eliminar-ramas-rafiki-twilio.md)
+- [`prompts/2026-10-16-interledger-demo.md`](prompts/2026-10-16-interledger-demo.md)
+- [`prompts/2026-10-16-demo-account-pool.md`](prompts/2026-10-16-demo-account-pool.md)
+- [`prompts/2026-10-16-demo-wallets-dx.md`](prompts/2026-10-16-demo-wallets-dx.md)
+- [`prompts/2026-10-16-mvp-comandos-cortos.md`](prompts/2026-10-16-mvp-comandos-cortos.md)
+- [`prompts/2026-10-17-readme-chasky.md`](prompts/2026-10-17-readme-chasky.md)
+- [`prompts/2026-10-17-demo-pagos-reales.md`](prompts/2026-10-17-demo-pagos-reales.md)
+
+The index of every log file is kept in [`prompts/README.md`](prompts/README.md).
 
 > Note: update this file whenever AI touches new code.
 
@@ -317,3 +334,44 @@ name's meaning, the Colombia/COP launch scope and the Rhyza (not yet released) d
 application code changed. Pending human review: the roadmap wording and the licensing/custody claims
 (phase 4) must be checked by the team, and no connectivity statistics are cited on purpose. Prompts
 recorded verbatim in [`prompts/2026-10-17-readme-chasky.md`](prompts/2026-10-17-readme-chasky.md).
+
+## Live Relayion demo, SMS UX fixes and `incomingAmount` (2026-10-17)
+
+OpenCode (agent; model **DeepSeek V4.1 Flash**) ran the first real end-to-end demo with the Relayion
+provider on Railway and applied the fixes the team requested while the demo was running. All changes
+are backend-only; no `frontend/**` file was touched and no existing migration was edited.
+
+- New payment supersedes the pending one: `backend/src/sms/command-service.ts` now cancels the open
+  `AWAITING_CONFIRMATION` payment for that user when a new `P ...` command arrives, so the user never
+  has to finish or cancel the previous one.
+- Clearer help text and global destination aliases: `command-service.ts` (help/`AYUDA` wording) and
+  `backend/src/recipients/service.ts` (alias resolution now falls back to a global lookup, so any
+  registered sender can pay any registered alias). Merged as PR #15 (`57e73ed`).
+- `incomingAmount` on the incoming payment: `backend/src/payments/open-payments.ts`
+  (`createIncomingPayment`), `backend/src/payments/service.ts` (the bound is the caller's receive
+  amount, or the debit amount when both wallets share the asset) and
+  `backend/src/payments/types.ts` / `fake.ts` (contract). Merged as PR #16 (`c00beb8`), 131 tests
+  passing, deployed to Railway (`SUCCESS`, `/health` = `ok`).
+- Evidence-gathering, not code: the last two Interledger transactions were read back from the
+  resource server (`outgoingPayment.get`) and reconciled to `COMPLETED`; both had already settled
+  (`sentAmount == debitAmount`, `failed: false`) while our database still showed `PROCESSING`. This is
+  recorded as the justification for automatic reconciliation, which is **not implemented yet**.
+- Documentation: the end-to-end technical description in
+  [`backend/docs/architecture.md`](backend/docs/architecture.md), written with the agent and pending a
+  human read-through of the Open Payments and grant sections.
+- Human-review priorities for this batch: the supersede rule (it cancels a live payment), the global
+  alias fallback (it widens who can be paid), and the `incomingAmount` bound (an over-tight bound
+  would make the receiving side reject a payment).
+
+### Prompt-log audit and secret redaction
+
+The agent audited [`prompts/`](prompts/) on request: it removed the retired bootstrap log
+`prompts/2026-10-16-cierre-bootstrap.md` (kept in history as evidence), completed the index in
+[`prompts/README.md`](prompts/README.md) with the thirteen topic files that the parallel assistants
+had created without indexing, and added the missing references here.
+Two live secrets found in the logs were redacted on 2026-10-17 — the application signing key in
+`prompts/2026-10-16-interledger-demo.md` and the 64-hex `ENCRYPTION_KEY` value in
+`prompts/2026-10-16-railway-mcp.md` — keeping the prompt text but removing the values. The real values
+remain only in the private environment (`.env`, git-ignored) and Railway variables.
+Prompt recorded verbatim in
+[`prompts/2026-10-17-demo-pagos-reales.md`](prompts/2026-10-17-demo-pagos-reales.md).
