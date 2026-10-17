@@ -303,13 +303,11 @@ async function handlePay(
     };
   }
 
-  // One pending payment per user. A stale one is expired first so the user can
-  // always start a new payment after the code lapses.
+  // A new payment supersedes any pending one: cancel it instead of asking the
+  // user to finish the previous payment. A stale pending payment is expired.
   const pending = await pendingPayment(deps.db, user.id);
-  if (pending) {
-    if (!(await expireIfStale(deps.db, pending))) {
-      return { reply: ONE_PENDING_REPLY, paymentId: pending.id, state: pending.state };
-    }
+  if (pending && !(await expireIfStale(deps.db, pending))) {
+    await cancelPendingPayment(deps, pending.id);
   }
 
   let payment;
