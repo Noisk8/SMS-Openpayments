@@ -88,7 +88,7 @@ export async function logout(db: Db, token: string) {
 
 
 export function testPasswordEnabled(config: AppConfig) {
-  return config.NODE_ENV !== "production" && config.SMS_PROVIDER === "mock" && config.TEST_PASSWORD_LOGIN_ENABLED === "true";
+  return config.NODE_ENV !== "production" && config.TEST_PASSWORD_LOGIN_ENABLED === "true";
 }
 
 export async function setTestPassword(db: Db, userId: string, password: string) {

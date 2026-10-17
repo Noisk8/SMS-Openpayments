@@ -4,15 +4,17 @@ import { useEffect, useState, type FormEvent } from "react";
 
 export function PhoneLogin() {
   const [testAvailable, setTestAvailable] = useState(false);
-  const [passwordMode, setPasswordMode] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [passwordMode, setPasswordMode] = useState(true);
   const [password, setPassword] = useState("");
-  useEffect(() => { fetch("/api/customer/login/options").then(r => r.ok ? r.json() : null).then(data => { const enabled = Boolean(data?.testPassword); setTestAvailable(enabled); setPasswordMode(enabled); }).catch(() => {}); }, []);
+  useEffect(() => { fetch("/api/customer/login/options").then(r => r.ok ? r.json() : null).then(data => { const enabled = Boolean(data?.testPassword); setTestAvailable(enabled); setPasswordMode(enabled ? true : false); }).catch(() => { setPasswordMode(false); }).finally(() => { setReady(true); }); }, []);
   const [phone, setPhone] = useState("");
   const [challenge, setChallenge] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [sentAt, setSentAt] = useState(0);
+  if (!ready) return <div className="chasky-login"><section className="chasky-login-form"><p>Cargando…</p></section></div>;
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(""); setBusy(true);
     try {
@@ -27,8 +29,7 @@ export function PhoneLogin() {
   return <div className="chasky-login">
     <section className="chasky-login-story"><span className="chasky-eyebrow">TU DINERO, MÁS CERCA</span><div className="chasky-mark">C<span>↗︎</span></div><h1>Tu celular.<br />Tu cuenta.<br /><em>Tu Chasky.</em></h1><p>Una forma más simple de estar al día con tu dinero. Entra con el número que ya usas para pagar por SMS.</p><div className="chasky-security">◈ Sin contraseñas que recordar<br /><span>Un código privado, directo a tu celular.</span></div></section>
     <section className="chasky-login-form"><span className="chasky-pill">BIENVENIDO A CHASKY</span><h2>{challenge ? "Revisa tus mensajes" : "Entra a tu cuenta"}</h2><p>{challenge ? `Si ${phone} tiene una cuenta activa, recibirá un código de 6 dígitos. Vence en 5 minutos.` : passwordMode ? "Ingresa con tu número de celular y tu contraseña de prueba." : "Tu número es la llave. Te enviaremos un código para verificar que eres tú."}</p>
-      {testAvailable && !challenge && <div className="mb-5 flex gap-4 text-sm"><button type="button" aria-pressed={!passwordMode} onClick={() => { setPasswordMode(false); setError(""); }}>Código SMS</button><button type="button" aria-pressed={passwordMode} onClick={() => { setPasswordMode(true); setError(""); }}>Contraseña de prueba</button></div>}
-      {passwordMode && <p className="chasky-test-banner">Acceso de desarrollo. No verifica el teléfono ni autoriza pagos.</p>}
+      {testAvailable && <p className="chasky-test-banner">Ingresa con tu número de celular y tu contraseña.</p>}
       <form onSubmit={submit} className="space-y-5">
         {challenge ? <label className="chasky-field">Código de verificación<input autoFocus value={code} onChange={e => setCode(e.target.value.replace(/\D/g, "").slice(0,6))} inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" required maxLength={6} placeholder="000000" /></label> : <label className="chasky-field">Número de celular<input autoFocus type="tel" value={phone} onChange={e => setPhone(e.target.value.replace(/[\s()-]/g, ""))} autoComplete="tel" placeholder="300 123 4567" required pattern="(\+[1-9][0-9]{7,14}|3[0-9]{9})" /><span>Colombia: 10 dígitos. Otros países: incluye + y el indicativo.</span></label>}
         {passwordMode && <label className="chasky-field">Contraseña<input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} minLength={7} maxLength={128} required /></label>}
