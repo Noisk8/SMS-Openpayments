@@ -240,12 +240,12 @@ describe("SMS MVP short commands", () => {
     expect(count?.n).toBe(0);
   });
 
-  it("solo permite un pago pendiente por usuario", async () => {
+  it("un pago nuevo reemplaza al pendiente anterior", async () => {
     await run("P 1000 Tienda Ruta N");
     const second = await run("P 2000 Juan");
-    expect(second.reply).toBe("Ya tienes un pago pendiente. Usa su codigo o envia 0 para cancelar.");
-    const count = await db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM payments`);
-    expect(count?.n).toBe(1);
+    expect(second.reply).toContain("Responde");
+    const rows = await db.all<{ state: string }>(`SELECT state FROM payments ORDER BY seq`);
+    expect(rows.map((row) => row.state)).toEqual(["CANCELLED", "AWAITING_CONFIRMATION"]);
   });
 
   it("2 ya no lista destinos: es un comando desconocido", async () => {
