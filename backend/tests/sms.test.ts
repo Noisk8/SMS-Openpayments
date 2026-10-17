@@ -78,7 +78,7 @@ describe("webhook SMS", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ ok: true, duplicate: false });
-    expect(String(res.json().reply)).toContain("P 1000 ANA: pagar");
-    expect(String(res.json().reply)).toContain("9: ayuda");
+    expect(String(res.json().reply)).toContain("P <monto> <destino>");
+    expect(String(res.json().reply)).toContain("9 ayuda");
   });
 });
