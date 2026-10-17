@@ -266,7 +266,7 @@ describe("SMS MVP short commands", () => {
     expect(numbered.reply).toBe("Destino no encontrado. 9 para ayuda.");
   });
 
-  it("cada usuario resuelve solo sus propios alias", async () => {
+  it("los destinos son globales: un alias registrado por otro usuario sí se puede pagar", async () => {
     await db.run(
       `INSERT INTO users (id, phone, phone_verified_at, status) VALUES ('u2', ?, ?, 'active')`,
       [OTHER_PHONE, nowIso()],
@@ -287,9 +287,14 @@ describe("SMS MVP short commands", () => {
     expect(res.state).toBe("AWAITING_CONFIRMATION");
     expect(res.reply).toContain("Destino: Carol");
 
-    // An alias owned by another user is never visible here.
+    // An alias registered by the other user is payable from here too.
     const foreign = await run("P 1000 Ana", OTHER_PHONE);
-    expect(foreign.reply).toBe("Destino no encontrado. 9 para ayuda.");
+    expect(foreign.state).toBe("AWAITING_CONFIRMATION");
+    expect(foreign.reply).toContain("Destino: Ana");
+
+    // An alias nobody registered still does not resolve.
+    const missing = await run("P 1000 Nadie", OTHER_PHONE);
+    expect(missing.reply).toBe("Destino no encontrado. 9 para ayuda.");
   });
 
   it("un código de 4 dígitos confirma el pago pendiente y avisa al confirmar", async () => {
