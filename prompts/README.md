@@ -33,5 +33,7 @@ AI Policy. One file per topic/session.
   adapter (signed webhooks, body enrichment, outbound sends).
 - [`2026-10-16-mvp-comandos-sms.md`](2026-10-16-mvp-comandos-sms.md) — SMS MVP short command
   interface (numbered recipients, confirm by code).
+- [`2026-10-17-readme-chasky.md`](2026-10-17-readme-chasky.md) — bilingual Chasky README (slogan,
+  architecture, roadmap, name tribute).
 
 Convention: `YYYY-MM-DD-topic.md`, with the prompt exactly as sent plus the relevant team answers.

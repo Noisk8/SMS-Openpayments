@@ -307,3 +307,13 @@ existing long commands, which keep working as compatible alternatives.
   pending payment.
 - `frontend/**` was not touched. Prompt recorded verbatim in
   [`prompts/2026-10-16-mvp-comandos-sms.md`](prompts/2026-10-16-mvp-comandos-sms.md).
+
+## Bilingual Chasky README (2026-10-17)
+
+Claude Code (model **Sonnet 5.5**) rewrote the root `README.md` (English) and created `README.es.md`
+(Spanish): the problem, benefits, SMS flow, conceptual architecture and payment-flow Mermaid diagrams,
+install steps, the meaning of the name Chasky, and a phased roadmap. The team supplied the slogan, the
+name's meaning, the Colombia/COP launch scope and the Rhyza (not yet released) direction. No
+application code changed. Pending human review: the roadmap wording and the licensing/custody claims
+(phase 4) must be checked by the team, and no connectivity statistics are cited on purpose. Prompts
+recorded verbatim in [`prompts/2026-10-17-readme-chasky.md`](prompts/2026-10-17-readme-chasky.md).
