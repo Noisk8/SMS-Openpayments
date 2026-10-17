@@ -202,8 +202,15 @@ export async function getRecipientByDestination(
     return getRecipientByNumber(db, userId, Number.parseInt(value, 10));
   }
   const target = normalizeAlias(value);
-  const recipients = await listRecipients(db, userId);
-  return recipients.find((recipient) => normalizeAlias(recipient.alias) === target);
+  const own = (await listRecipients(db, userId)).find(
+    (recipient) => normalizeAlias(recipient.alias) === target,
+  );
+  if (own) {
+    return own;
+  }
+  // Aliases are global: a registered destination can be paid by any sender.
+  const all = await db.all<RecipientRow>(`SELECT * FROM recipients ORDER BY created_at ASC`);
+  return all.find((recipient) => normalizeAlias(recipient.alias) === target);
 }
 
 /** Case- and whitespace-insensitive alias key for SMS matching. */

@@ -162,18 +162,17 @@ describe("SMS MVP short commands", () => {
   });
 
   const SHORT_HELP = [
-    "P 1000 ANA: pagar",
-    "Codigo recibido: confirmar",
-    "0: cancelar",
-    "1: ultimo pago",
-    "9: ayuda",
+    "Para pagar: P <monto> <destino>",
+    "Ejemplo:    P 1000 RUTA",
+    "Confirmar:  responde solo el codigo de 4 digitos",
+    "0 cancela | 1 ultimo pago | 9 ayuda",
   ].join("\n");
 
   it("9 y las palabras de ayuda devuelven la misma ayuda corta, sin listar destinos", async () => {
     for (const text of ["9", "AYUDA", "ayuda", "HELP", "help", "Ayuda"]) {
       const help = await run(text);
       expect(help.reply).toBe(SHORT_HELP);
-      expect(help.reply).not.toMatch(/destino/i);
+      expect(help.reply).not.toMatch(/Tienda Ruta N|Ana|Juan/);
     }
   });
 
@@ -438,7 +437,7 @@ describe("SMS MVP short commands", () => {
     expect(cancelled.state).toBe("CANCELLED");
 
     const help = await run("9");
-    expect(help.reply).toContain("P 1000 ANA: pagar");
+    expect(help.reply).toContain("P <monto> <destino>");
     expect(code).toMatch(/^\d{4}$/);
   });
 

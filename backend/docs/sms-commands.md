@@ -81,11 +81,10 @@ the user to reuse the original SMS.
 ## Help (`9`, `AYUDA`, `HELP`)
 
 ```
-P 1000 ANA: pagar
-Codigo recibido: confirmar
-0: cancelar
-1: ultimo pago
-9: ayuda
+Para pagar: P <monto> <destino>
+Ejemplo:    P 1000 RUTA
+Confirmar:  responde solo el codigo de 4 digitos
+0 cancela | 1 ultimo pago | 9 ayuda
 ```
 
 The help never mentions a destination list: there is none.
@@ -94,7 +93,8 @@ The help never mentions a destination list: there is none.
 
 - The sender must be registered, verified and active.
 - Amounts use the wallet currency; it is shown implicitly (never in the text).
-- Destinations resolve by alias only (case- and whitespace-insensitive); the
+- Destinations resolve by alias only (case- and whitespace-insensitive) and are
+  **global**: any sender can pay any registered alias. The
   `recipients.number` column and `recipient_counters` are no longer part of the
   SMS interface.
 - One pending payment per user.

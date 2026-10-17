@@ -80,11 +80,10 @@ export const MVP_MAX_AMOUNT_MAJOR = 1_000_000;
  * destination list.
  */
 export const SHORT_HELP_TEXT = [
-  "P 1000 ANA: pagar",
-  "Codigo recibido: confirmar",
-  "0: cancelar",
-  "1: ultimo pago",
-  "9: ayuda",
+  "Para pagar: P <monto> <destino>",
+  "Ejemplo:    P 1000 RUTA",
+  "Confirmar:  responde solo el codigo de 4 digitos",
+  "0 cancela | 1 ultimo pago | 9 ayuda",
 ].join("\n");
 
 export const UNKNOWN_COMMAND_REPLY = "Comando no reconocido. 9 para ayuda.";

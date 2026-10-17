@@ -151,9 +151,9 @@ describe("SMS command service", () => {
   it("responde la ayuda corta a AYUDA y rechaza comandos desconocidos", async () => {
     const help = await run("AYUDA");
     expect(help.reply).toBe(
-      ["P 1000 ANA: pagar", "Codigo recibido: confirmar", "0: cancelar", "1: ultimo pago", "9: ayuda"].join("\n"),
+      ["Para pagar: P <monto> <destino>", "Ejemplo:    P 1000 RUTA", "Confirmar:  responde solo el codigo de 4 digitos", "0 cancela | 1 ultimo pago | 9 ayuda"].join("\n"),
     );
-    expect(help.reply).not.toMatch(/destino/i);
+    expect(help.reply).not.toMatch(/Tienda Ruta N|Ana|Juan/);
 
     const unknown = await run("HOLA");
     expect(unknown.reply).toMatch(/no reconocido/i);
@@ -162,7 +162,7 @@ describe("SMS command service", () => {
   it("acepta verbos, separador, moneda y alias en minúsculas", async () => {
     const help = await run("ayuda");
     expect(help.reply).toBe(
-      ["P 1000 ANA: pagar", "Codigo recibido: confirmar", "0: cancelar", "1: ultimo pago", "9: ayuda"].join("\n"),
+      ["Para pagar: P <monto> <destino>", "Ejemplo:    P 1000 RUTA", "Confirmar:  responde solo el codigo de 4 digitos", "0 cancela | 1 ultimo pago | 9 ayuda"].join("\n"),
     );
 
     const prepared = await run("pagar 5000 cop a bob");
