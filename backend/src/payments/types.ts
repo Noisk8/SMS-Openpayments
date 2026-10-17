@@ -89,6 +89,8 @@ export interface PaymentProvider extends WalletDirectory {
   createIncomingPayment(input: {
     wallet: WalletMetadata;
     accessToken?: string;
+    /** Maximum amount the recipient should receive under this incoming payment. */
+    incomingAmount?: Amount;
   }): Promise<IncomingPayment>;
   createQuote(input: {
     wallet: WalletMetadata;

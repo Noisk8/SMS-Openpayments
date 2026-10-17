@@ -123,7 +123,11 @@ export class OpenPaymentsProvider implements PaymentProvider {
 
   // --- PaymentProvider -------------------------------------------------------
 
-  async createIncomingPayment(input: { wallet: WalletMetadata; accessToken?: string }): Promise<IncomingPayment> {
+  async createIncomingPayment(input: {
+    wallet: WalletMetadata;
+    accessToken?: string;
+    incomingAmount?: Amount;
+  }): Promise<IncomingPayment> {
     return this.withProviderErrors("createIncomingPayment", async () => {
       const client = await this.client();
       const accessToken =
@@ -135,7 +139,10 @@ export class OpenPaymentsProvider implements PaymentProvider {
         }));
       const created = await client.incomingPayment.create(
         { url: input.wallet.resourceServer, accessToken },
-        { walletAddress: input.wallet.walletAddress },
+        {
+          walletAddress: input.wallet.walletAddress,
+          ...(input.incomingAmount ? { incomingAmount: toOpAmount(input.incomingAmount) } : {}),
+        },
       );
       return { id: created.id };
     });

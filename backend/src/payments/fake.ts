@@ -240,7 +240,11 @@ export class FakePaymentProvider implements PaymentProvider {
 
   // --- PaymentProvider -------------------------------------------------------
 
-  async createIncomingPayment(input: { wallet: WalletMetadata; accessToken?: string }): Promise<IncomingPayment> {
+  async createIncomingPayment(input: {
+    wallet: WalletMetadata;
+    accessToken?: string;
+    incomingAmount?: Amount;
+  }): Promise<IncomingPayment> {
     const wallet = this.requireWallet(input.wallet.walletAddress);
     const id = `${wallet.metadata.walletAddress}/incoming-payments/${this.nextId("ip")}`;
     this.incomingPayments.set(id, { id, walletAddress: wallet.metadata.walletAddress });

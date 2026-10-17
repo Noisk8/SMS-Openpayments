@@ -167,7 +167,15 @@ export async function preparePayment(
     );
   }
 
-  const incoming = await provider.createIncomingPayment({ wallet: recipientWallet });
+  // Bound the incoming payment to the amount the recipient should receive.
+  // With matching assets the debit is the receive amount; otherwise only a
+  // caller-provided receive amount can be used.
+  const incomingAmount =
+    receiveInput ?? (sameAsset(senderWallet, recipientWallet) ? debitInput : undefined);
+  const incoming = await provider.createIncomingPayment({
+    wallet: recipientWallet,
+    ...(incomingAmount ? { incomingAmount } : {}),
+  });
   const quote = await provider.createQuote({
     wallet: senderWallet,
     receiver: incoming.id,
