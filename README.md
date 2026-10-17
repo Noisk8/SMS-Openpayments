@@ -4,6 +4,8 @@
 
 [English](README.md) · [Español](README.es.md)
 
+▶ [Demo video](https://www.youtube.com/watch?v=jM8o0tNt7ao) · 📄 [Pitch deck](presentacion/Chasky%20%E2%80%94%20SMS%20Open%20Payments%20%C2%B7%20Pitch%20Deck.pdf) · 📝 [Pitch notes](presentacion/notas%20dell%20pitch.pdf)
+
 Chasky lets anyone send and receive money with a plain text message. No app, no data plan, no
 smartphone. It is an **SMS gateway for [Open Payments](https://openpayments.dev/)**: the phone only
 speaks SMS, and an internet-connected backend does everything else on the Interledger network.
@@ -181,6 +183,7 @@ cd backend && npm run verify   # typecheck + tests
 ```
 backend/     Fastify + TypeScript backend: SMS gateway, payments, grants, jobs
 frontend/    Next.js dashboard and landing page
+presentacion/ Pitch deck, pitch notes and demo video link
 prompts/     AI prompt log (hackathon AI policy)
 AI_USAGE.md  AI usage disclosure
 ```
@@ -191,6 +194,14 @@ Chasky today is a **working proof of concept** that validates the whole loop on 
 network: a text message in, a real Open Payments transfer between wallets, and a text message back.
 It already covers SMS commands, alias-based recipients, code confirmation, grant-limited spending and
 a web dashboard. What follows is how it grows from here.
+
+## Presentation
+
+| | |
+|---|---|
+| **Demo video** | [Watch on YouTube](https://www.youtube.com/watch?v=jM8o0tNt7ao) |
+| **Pitch deck** | [Chasky — SMS Open Payments · Pitch Deck (PDF)](presentacion/Chasky%20%E2%80%94%20SMS%20Open%20Payments%20%C2%B7%20Pitch%20Deck.pdf) |
+| **Pitch notes** | [Pitch guide (PDF)](presentacion/notas%20dell%20pitch.pdf) |
 
 ## Roadmap
 
