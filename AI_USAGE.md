@@ -71,7 +71,7 @@ Verifiable state of the deliverable, checked on 2026-10-17:
 | Item | Evidence |
 |---|---|
 | Public GitHub repository | `https://github.com/Noisk8/SMS-Openpayments` — visibility `PUBLIC` (`gh repo view`) |
-| Everything delivered on the main branch | `main` = `origin/main` = `3502618`; the working tree is clean; PRs #2–#17 merged; the application code the team delivered lives in `main` |
+| Everything delivered on the main branch | `main` = `origin/main`, the single branch of record of the public repository; the working tree is clean; every feature PR (#2–#17) is merged. Application code, tests, migrations, scripts and documentation all live in `main` |
 | Application code written during the hackathon | The backend and the current frontend were written during the event (commits dated 2026-10-16/17). The pre-event prototype was deleted from the tree during the reset and survives only in git history; no prototype code was reused in the deliverable. The frontend was reworked during the event from the team's earlier design (see §5.7) |
 | Prompt log complete | `prompts/` holds the verbatim prompts of every session and tool, one file per topic, all indexed in `prompts/README.md` (32 files) |
 | Known and documented gaps | [`backend/docs/architecture.md`](backend/docs/architecture.md) lists the behaviours that are not implemented (automatic reconciliation, an SMS reply for payment errors, admin grant cancel/revoke against the real provider, etc.) |
